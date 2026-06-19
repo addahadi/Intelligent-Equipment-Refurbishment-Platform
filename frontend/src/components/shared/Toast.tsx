@@ -99,11 +99,11 @@ export default function Toast({ message, type, onDismiss }: ToastProps) {
 }
 
 export function ToastContainer() {
-  const { state, dismissToast } = useApp();
-  
-  if (!state.toasts || state.toasts.length === 0) return null;
+  const { toasts, dismissToast } = useApp();
 
-  const latestToast = state.toasts[state.toasts.length - 1];
+  if (!toasts || toasts.length === 0) return null;
+
+  const latestToast = toasts[toasts.length - 1];
 
   // Only success/error toasts match the UI spec described
   if (latestToast.type !== 'success' && latestToast.type !== 'error') {

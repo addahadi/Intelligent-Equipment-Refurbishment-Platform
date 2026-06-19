@@ -2,6 +2,8 @@ import type { ReactNode } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { Home, Heart, ShoppingBag, User } from 'lucide-react';
 import { useApp } from '../../store/AppContext';
+import { useFavorisIds } from '../../hooks/favoris';
+import { ToastContainer } from '../shared/Toast';
 
 // ─── Tab definition ───────────────────────────────────────────────────────────
 
@@ -21,10 +23,10 @@ const TABS: Tab[] = [
 // ─── ClientLayout ─────────────────────────────────────────────────────────────
 
 export default function ClientLayout() {
-  const { state } = useApp();
+  const { user } = useApp();
   const location = useLocation();
 
-  const favoriCount = state.favoris.length;
+  const favoriCount = useFavorisIds().size;
 
   return (
     <div
@@ -83,7 +85,7 @@ export default function ClientLayout() {
 
           <NavDesktopLink to="/compte">
             <User size={15} strokeWidth={1.75} aria-hidden="true" />
-            {state.currentClient ? state.currentClient.prenom : 'Compte'}
+            {user ? user.nom : 'Compte'}
           </NavDesktopLink>
         </nav>
       </header>
@@ -249,6 +251,8 @@ export default function ClientLayout() {
           );
         })}
       </nav>
+
+      <ToastContainer />
     </div>
   );
 }

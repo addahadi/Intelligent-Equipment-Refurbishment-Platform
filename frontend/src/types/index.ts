@@ -1,4 +1,6 @@
 // Enums
+export type Lang = 'fr' | 'ar'
+export type Role = 'CLIENT' | 'ADMINISTRATEUR'
 export type TypeComposant = 'ORGANE' | 'PIECE'
 export type EtatComposant = 'EN_RECONDITIONNEMENT' | 'EN_VENTE' | 'VENDU' | 'RECYCLE'
 export type QualiteEtat = 'COMME_NEUF' | 'TRES_BON' | 'BON' | 'CORRECT'
@@ -18,3 +20,15 @@ export interface Offre { id: number; designation: string; typePropose: TypeCompo
 export interface Commande { id: number; clientId: number; composantId: number; date: string; prix: number; statut: StatutCommande; dateFinGarantie: string }
 export interface Client { id: number; nom: string; prenom?: string; email: string; telephone?: string; adresse?: string; favoris: number[]; commandes: number[] }
 export interface Admin { id: number; nom: string; prenom?: string; email: string }
+
+// Authenticated profile as returned by the API (/auth/login, /auth/me).
+export interface User {
+  id: number
+  nom: string
+  email: string
+  role: Role
+  telephone?: string
+  adresse?: string
+  favoris?: number[]
+  commandes?: number[]
+}

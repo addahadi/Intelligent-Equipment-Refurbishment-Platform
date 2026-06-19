@@ -1,6 +1,9 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../store/AppContext';
+import { useComposants } from '../hooks/composants';
+import { useCategories } from '../hooks/categories';
+import { useFavorisIds, useToggleFavori } from '../hooks/favoris';
 import EquipmentCard from '../components/shared/EquipmentCard';
 import type { QualiteEtat as QualiteGrade } from '../types';
 
@@ -279,27 +282,36 @@ function SkeletonCard() {
 // ─── CataloguePage ────────────────────────────────────────────────────────────
 
 export default function CataloguePage() {
-  const { state, toggleFavori } = useApp();
+  const { isAuthenticated, showToast } = useApp();
   const navigate = useNavigate();
+
+  const { data: composantsData, isLoading: loading, isError } = useComposants({ etat: 'EN_VENTE' });
+  const { data: categoriesData } = useCategories();
+  const favorisIds = useFavorisIds();
+  const toggleFavoriMut = useToggleFavori();
+
+  const categories = useMemo(() => categoriesData ?? [], [categoriesData]);
 
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [sort, setSort] = useState<SortOption>('recent');
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
-  const [loading] = useState(false);
 
   const enVente = useMemo(
-    () => state.composants.filter(c => c.etatActuel === 'EN_VENTE'),
-    [state.composants]
+    () => (composantsData ?? []).filter(c => c.etatActuel === 'EN_VENTE'),
+    [composantsData]
   );
+
+  const handleToggleFavori = (composantId: number) => {
+    if (!isAuthenticated) {
+      showToast('Connectez-vous pour ajouter aux favoris.', 'error');
+      return;
+    }
+    toggleFavoriMut.mutate({ id: composantId, isFavori: favorisIds.has(composantId) });
+  };
 
   const marques = useMemo(
     () => Array.from(new Set(enVente.map(c => c.marque).filter(Boolean))).sort(),
     [enVente]
-  );
-
-  const etapesCount = useCallback(
-    (id: number) => state.etapes.filter(e => e.composantId === id).length,
-    [state.etapes]
   );
 
   const filtered = useMemo(() => {
@@ -316,9 +328,7 @@ export default function CataloguePage() {
       result = result.filter(c => c.categorieId === filters.categorieId);
     }
     if (filters.typeComposant !== null) {
-      result = result.filter(c => {
-        if (c.typeComposant !== filters.typeComposant) return false;
-      });
+      result = result.filter(c => c.typeComposant === filters.typeComposant);
     }
     if (filters.marque !== null) {
       result = result.filter(c => c.marque === filters.marque);
@@ -347,7 +357,7 @@ export default function CataloguePage() {
   const chips: Chip[] = useMemo(() => {
     const result: Chip[] = [];
     if (filters.categorieId !== null) {
-      const cat = state.categories.find(c => c.id === filters.categorieId);
+      const cat = categories.find(c => c.id === filters.categorieId);
       if (cat) result.push({ label: cat.libelle, onRemove: () => setFilters(f => ({ ...f, categorieId: null })) });
     }
     if (filters.typeComposant !== null) {
@@ -366,7 +376,7 @@ export default function CataloguePage() {
       result.push({ label: `Max ${filters.prixMax} €`, onRemove: () => setFilters(f => ({ ...f, prixMax: '' })) });
     }
     return result;
-  }, [filters, state.categories]);
+  }, [filters, categories]);
 
   const hasActiveFilters = chips.length > 0;
 
@@ -547,7 +557,7 @@ export default function CataloguePage() {
           <FilterPanel
             filters={filters}
             onFiltersChange={setFilters}
-            categories={state.categories}
+            categories={categories}
             marques={marques}
           />
         </aside>
@@ -598,6 +608,25 @@ export default function CataloguePage() {
               className="md:grid-cols-3"
             >
               {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
+            </div>
+          ) : isError ? (
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '64px 24px',
+                textAlign: 'center',
+                gap: '8px',
+              }}
+            >
+              <span style={{ fontSize: '14px', color: 'var(--oxide, #9C4A2C)', fontFamily: "'IBM Plex Sans', sans-serif" }}>
+                Impossible de charger le catalogue.
+              </span>
+              <span style={{ fontSize: '12px', color: 'var(--steel)' }}>
+                Vérifiez votre connexion et réessayez.
+              </span>
             </div>
           ) : filtered.length === 0 ? (
             <div
@@ -650,10 +679,9 @@ export default function CataloguePage() {
                 <EquipmentCard
                   key={composant.id}
                   composant={composant}
-                  categorie={state.categories.find(c => c.id === composant.categorieId)}
-                  isFavori={state.favoris.includes(composant.id)}
-                  onToggleFavori={() => toggleFavori(composant.id)}
-                  etapesCount={etapesCount(composant.id)}
+                  categorie={categories.find(c => c.id === composant.categorieId)}
+                  isFavori={favorisIds.has(composant.id)}
+                  onToggleFavori={() => handleToggleFavori(composant.id)}
                   onClick={() => navigate(`/equipement/${composant.id}`)}
                 />
               ))}
@@ -724,7 +752,7 @@ export default function CataloguePage() {
             <FilterPanel
               filters={filters}
               onFiltersChange={setFilters}
-              categories={state.categories}
+              categories={categories}
               marques={marques}
             />
             <button

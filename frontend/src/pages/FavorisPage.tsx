@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../store/AppContext';
+import { useLogin } from '../hooks/auth';
+import { useFavoris, useToggleFavori } from '../hooks/favoris';
+import { useCategories } from '../hooks/categories';
 import EquipmentCard from '../components/shared/EquipmentCard';
 
 // ─── AuthPrompt ───────────────────────────────────────────────────────────────
 
 function AuthPrompt() {
-  const { login } = useApp();
+  const loginMut = useLogin();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
@@ -25,7 +28,7 @@ function AuthPrompt() {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    login(email, password);
+    loginMut.mutate({ email, password });
   };
 
   return (
@@ -118,10 +121,13 @@ function AuthPrompt() {
 // ─── FavorisPage ──────────────────────────────────────────────────────────────
 
 export default function FavorisPage() {
-  const { state, toggleFavori } = useApp();
+  const { isAuthenticated } = useApp();
   const navigate = useNavigate();
+  const { data: favorisData, isLoading } = useFavoris();
+  const { data: categoriesData } = useCategories();
+  const toggleFavoriMut = useToggleFavori();
 
-  if (!state.currentClient) {
+  if (!isAuthenticated) {
     return (
       <div style={{ backgroundColor: 'var(--atelier)', minHeight: '100vh' }}>
         <AuthPrompt />
@@ -129,9 +135,16 @@ export default function FavorisPage() {
     );
   }
 
-  const favorisComposants = state.favoris
-    .map(id => state.composants.find(c => c.id === id))
-    .filter((c): c is NonNullable<typeof c> => Boolean(c));
+  const favorisComposants = favorisData ?? [];
+  const categories = categoriesData ?? [];
+
+  if (isLoading) {
+    return (
+      <div style={{ backgroundColor: 'var(--atelier)', minHeight: '100vh', padding: '64px 24px', textAlign: 'center', color: 'var(--steel)', fontFamily: "'IBM Plex Sans', sans-serif" }}>
+        Chargement de vos favoris…
+      </div>
+    );
+  }
 
   return (
     <div style={{ backgroundColor: 'var(--atelier)', minHeight: '100vh' }}>
@@ -244,10 +257,9 @@ export default function FavorisPage() {
                 <div key={composant.id} style={{ position: 'relative' }}>
                   <EquipmentCard
                     composant={composant}
-                    categorie={state.categories.find(c => c.id === composant.categorieId)}
+                    categorie={categories.find(c => c.id === composant.categorieId)}
                     isFavori={true}
-                    onToggleFavori={() => toggleFavori(composant.id)}
-                    etapesCount={state.etapes.filter(e => e.composantId === composant.id).length}
+                    onToggleFavori={() => toggleFavoriMut.mutate({ id: composant.id, isFavori: true })}
                     onClick={() => navigate(`/equipement/${composant.id}`)}
                   />
                   {isVendu && (

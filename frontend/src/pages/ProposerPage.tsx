@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, type ChangeEvent } from 'react';
-import { useApp } from '../store/AppContext';
-import { mockCategories } from '../data/mock';
+import { useSubmitOffre } from '../hooks/offres';
+import { useCategories } from '../hooks/categories';
 
 type TypeComposant = 'Organe' | 'Piece';
 type EtatDeclare = 'FONCTIONNEL' | 'PARTIELLEMENT_FONCTIONNEL' | 'DEFECTUEUX';
@@ -689,11 +689,13 @@ function ConfirmationScreen() {
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function ProposerPage() {
-  const { submitOffre } = useApp();
+  const submitOffreMut = useSubmitOffre();
+  const { data: categoriesData } = useCategories();
 
   const [form, setForm] = useState<FormData>(INITIAL_FORM);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [submitted, setSubmitted] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const set = useCallback(
     <K extends keyof FormData>(key: K) =>
@@ -728,28 +730,35 @@ export default function ProposerPage() {
       setErrors(errs);
       return;
     }
+    setSubmitError(null);
 
-    submitOffre({
-      designation: form.designation.trim(),
-      description: form.description.trim(),
-      typePropose: form.typePropose.toUpperCase() as any,
-      categorieId: form.categorieId as number,
-      prixPropose: Number(form.prixPropose),
-      marque: form.marque.trim(),
-      modele: form.modele.trim(),
-      reference: form.reference.trim(),
-      etatDeclare: form.etatDeclare as EtatDeclare,
-      images: form.images
-    }, {
-      nom: form.entrepriseNom.trim(),
-      contact: form.entrepriseContact.trim(),
-      adresse: form.entrepriseAdresse.trim(),
-    });
-
-    setSubmitted(true);
+    submitOffreMut.mutate(
+      {
+        designation: form.designation.trim(),
+        description: form.description.trim(),
+        typePropose: form.typePropose.toUpperCase() as 'ORGANE' | 'PIECE',
+        categorieId: form.categorieId as number,
+        prixPropose: Number(form.prixPropose),
+        marque: form.marque.trim(),
+        modele: form.modele.trim(),
+        reference: form.reference.trim(),
+        etatDeclare: form.etatDeclare as EtatDeclare,
+        images: form.images,
+        entreprise: {
+          nom: form.entrepriseNom.trim(),
+          contact: form.entrepriseContact.trim(),
+          adresse: form.entrepriseAdresse.trim(),
+        },
+      },
+      {
+        onSuccess: () => setSubmitted(true),
+        onError: (err: unknown) =>
+          setSubmitError((err as { message?: string })?.message ?? "Échec de l'envoi de l'offre."),
+      },
+    );
   };
 
-  const categoryOptions = mockCategories.map((c) => ({ value: c.id, label: c.libelle }));
+  const categoryOptions = (categoriesData ?? []).map((c) => ({ value: c.id, label: c.libelle }));
 
   return (
     <div
@@ -1062,12 +1071,28 @@ export default function ProposerPage() {
                   </div>
                 )}
 
+                {/* Server error */}
+                {submitError && (
+                  <div
+                    role="alert"
+                    style={{
+                      marginTop: 12,
+                      fontSize: 13,
+                      color: T.oxide,
+                      fontFamily: "'IBM Plex Sans', sans-serif",
+                    }}
+                  >
+                    {submitError}
+                  </div>
+                )}
+
                 {/* Submit */}
                 <div style={{ paddingTop: 4 }}>
                   <button
                     type="submit"
+                    disabled={submitOffreMut.isPending}
                     style={{
-                      background: T.verdigris,
+                      background: submitOffreMut.isPending ? T.steel : T.verdigris,
                       color: '#fff',
                       border: 'none',
                       borderRadius: 4,
@@ -1075,15 +1100,15 @@ export default function ProposerPage() {
                       fontSize: 14,
                       fontWeight: 600,
                       fontFamily: "'IBM Plex Sans', sans-serif",
-                      cursor: 'pointer',
+                      cursor: submitOffreMut.isPending ? 'not-allowed' : 'pointer',
                       width: '100%',
                       letterSpacing: '0.01em',
                       transition: 'background 0.15s',
                     }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = T.verdigris700; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = T.verdigris; }}
+                    onMouseEnter={(e) => { if (!submitOffreMut.isPending) e.currentTarget.style.background = T.verdigris700; }}
+                    onMouseLeave={(e) => { if (!submitOffreMut.isPending) e.currentTarget.style.background = T.verdigris; }}
                   >
-                    Soumettre l'offre
+                    {submitOffreMut.isPending ? 'Envoi…' : "Soumettre l'offre"}
                   </button>
                   <p
                     style={{

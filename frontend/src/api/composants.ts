@@ -1,0 +1,33 @@
+import api from '../lib/axios'
+import { composantListSchema, composantSchema, commandeSchema } from '../lib/schemas'
+import type { Organe, Piece, Commande } from '../types'
+
+export interface ComposantFilters {
+  etat?: string
+  search?: string
+  categorieId?: number
+  type?: 'ORGANE' | 'PIECE'
+  marque?: string
+  qualite?: string
+  prixMin?: number
+  prixMax?: number
+  sort?: 'recent' | 'prix_asc' | 'prix_desc'
+}
+
+export async function listComposants(filters: ComposantFilters = {}): Promise<(Organe | Piece)[]> {
+  const params = Object.fromEntries(
+    Object.entries(filters).filter(([, v]) => v !== undefined && v !== null && v !== ''),
+  )
+  const { data } = await api.get('/composants', { params })
+  return composantListSchema.parse(data) as unknown as (Organe | Piece)[]
+}
+
+export async function getComposant(id: number): Promise<Organe | Piece> {
+  const { data } = await api.get(`/composants/${id}`)
+  return composantSchema.parse(data) as unknown as Organe | Piece
+}
+
+export async function acheterComposant(id: number): Promise<Commande> {
+  const { data } = await api.post(`/composants/${id}/acheter`)
+  return commandeSchema.parse(data) as Commande
+}

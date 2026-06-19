@@ -5,22 +5,23 @@ import { useApp } from '../store/AppContext';
 // ─── ComptePage ───────────────────────────────────────────────────────────────
 
 export default function ComptePage() {
-  const { state, logout } = useApp();
+  const { user, logout } = useApp();
   const navigate = useNavigate();
 
   // Redirect to /connexion if not authenticated
   useEffect(() => {
-    if (!state.currentClient) {
+    if (!user) {
       navigate('/connexion', { replace: true });
     }
-  }, [state.currentClient, navigate]);
+  }, [user, navigate]);
 
-  if (!state.currentClient) {
+  if (!user) {
     return null;
   }
 
-  const { nom, prenom, email } = state.currentClient;
-  const displayName = [prenom, nom].filter(Boolean).join(' ');
+  const { nom, email } = user;
+  const prenom: string | undefined = undefined;
+  const displayName = nom;
 
   const handleLogout = () => {
     logout();

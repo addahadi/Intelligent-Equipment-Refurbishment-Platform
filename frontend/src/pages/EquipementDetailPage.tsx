@@ -1,6 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../store/AppContext';
+import { useLogin } from '../hooks/auth';
+import { useComposant, useComposants, useAcheter } from '../hooks/composants';
+import { useCategories } from '../hooks/categories';
+import { useEtapes } from '../hooks/etapes';
+import { useFavorisIds, useToggleFavori } from '../hooks/favoris';
 import ImageGallery from '../components/shared/ImageGallery';
 import ReferencePlate from '../components/shared/ReferencePlate';
 import StateBadge from '../components/shared/StateBadge';
@@ -12,7 +17,7 @@ import EquipmentCard from '../components/shared/EquipmentCard';
 // ─── AuthSheet ────────────────────────────────────────────────────────────────
 
 function AuthSheet({ onClose }: { onClose: () => void }) {
-  const { login } = useApp();
+  const loginMut = useLogin();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
@@ -31,8 +36,7 @@ function AuthSheet({ onClose }: { onClose: () => void }) {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    login(email, password);
-    onClose();
+    loginMut.mutate({ email, password }, { onSuccess: () => onClose() });
   };
 
   return (
@@ -123,7 +127,7 @@ interface ConfirmPurchaseDialogProps {
   prix: number;
   garantie: number;
   onClose: () => void;
-  onConfirm: () => { success: boolean; message: string };
+  onConfirm: () => Promise<{ success: boolean; message: string }>;
 }
 
 function ConfirmPurchaseDialog({
@@ -135,6 +139,7 @@ function ConfirmPurchaseDialog({
   onConfirm,
 }: ConfirmPurchaseDialogProps) {
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const dateFinGarantie = useMemo(() => {
     const d = new Date();
@@ -142,8 +147,11 @@ function ConfirmPurchaseDialog({
     return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
   }, [garantie]);
 
-  const handleConfirm = () => {
-    const result = onConfirm();
+  const handleConfirm = async () => {
+    setBusy(true);
+    setError(null);
+    const result = await onConfirm();
+    setBusy(false);
     if (!result.success) {
       setError(result.message);
     } else {
@@ -276,20 +284,21 @@ function ConfirmPurchaseDialog({
           </button>
           <button
             onClick={handleConfirm}
+            disabled={busy}
             style={{
               flex: 2,
               padding: '11px',
               fontSize: '14px',
               fontFamily: "'IBM Plex Sans', sans-serif",
               fontWeight: 600,
-              backgroundColor: 'var(--verdigris)',
+              backgroundColor: busy ? 'var(--steel)' : 'var(--verdigris)',
               color: '#fff',
               border: 'none',
               borderRadius: '4px',
-              cursor: 'pointer',
+              cursor: busy ? 'not-allowed' : 'pointer',
             }}
           >
-            Confirmer l'achat
+            {busy ? 'Achat en cours…' : "Confirmer l'achat"}
           </button>
         </div>
       </div>
@@ -331,24 +340,29 @@ function HeartButton({ active, onClick }: { active: boolean; onClick: () => void
 export default function EquipementDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { state, toggleFavori, acheter, showToast } = useApp();
+  const { isAuthenticated, showToast } = useApp();
 
   const composantId = Number(id);
-  const composant = state.composants.find(c => c.id === composantId);
+  const { data: composant, isLoading, isError } = useComposant(composantId);
+  const { data: categoriesData } = useCategories();
+  const { data: etapesData } = useEtapes(composantId);
+  const { data: enVenteData } = useComposants({ etat: 'EN_VENTE' });
+  const { data: parent } = useComposant(composant?.parentOrganeId ?? 0);
+  const favorisIds = useFavorisIds();
+  const toggleFavoriMut = useToggleFavori();
+  const acheterMut = useAcheter();
 
   const [authSheetOpen, setAuthSheetOpen] = useState(false);
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
-  const [favoriLocal, setFavoriLocal] = useState(state.favoris.includes(composantId));
 
-  const categorie = composant ? state.categories.find(c => c.id === composant.categorieId) : undefined;
-  const etapes = composant ? state.etapes.filter(e => e.composantId === composant.id) : [];
-  const parentOrgane = composant?.parentOrganeId
-    ? state.composants.find(c => c.id === composant.parentOrganeId)
-    : undefined;
+  const categorie = composant ? (categoriesData ?? []).find(c => c.id === composant.categorieId) : undefined;
+  const etapes = etapesData ?? [];
+  const parentOrgane = composant?.parentOrganeId ? parent : undefined;
+  const categories = categoriesData ?? [];
 
   const recommendations = useMemo(() => {
     if (!composant) return [];
-    return state.composants
+    return (enVenteData ?? [])
       .filter(c =>
         c.id !== composant.id &&
         c.etatActuel === 'EN_VENTE' &&
@@ -358,9 +372,17 @@ export default function EquipementDetailPage() {
         )
       )
       .slice(0, 3);
-  }, [composant, state.composants]);
+  }, [composant, enVenteData]);
 
-  if (!composant) {
+  if (isLoading) {
+    return (
+      <div style={{ padding: '64px 24px', textAlign: 'center', color: 'var(--steel)', fontFamily: "'IBM Plex Sans', sans-serif" }}>
+        Chargement…
+      </div>
+    );
+  }
+
+  if (isError || !composant) {
     return (
       <div style={{ padding: '64px 24px', textAlign: 'center', color: 'var(--steel)', fontFamily: "'IBM Plex Sans', sans-serif" }}>
         Équipement introuvable.
@@ -371,31 +393,33 @@ export default function EquipementDetailPage() {
   const isEnVente = composant.etatActuel === 'EN_VENTE';
   const prix = composant.prix ?? 0;
   const garantie = composant.garantie ?? 12;
+  const favoriLocal = favorisIds.has(composantId);
 
-  const handleFavoriToggle = () => {
-    if (!state.currentClient) {
+  const handleFavoriToggle = (targetId: number = composantId) => {
+    if (!isAuthenticated) {
       setAuthSheetOpen(true);
       return;
     }
-    setFavoriLocal(f => !f);
-    toggleFavori(composantId);
+    toggleFavoriMut.mutate({ id: targetId, isFavori: favorisIds.has(targetId) });
   };
 
   const handleBuyClick = () => {
-    if (!state.currentClient) {
+    if (!isAuthenticated) {
       setAuthSheetOpen(true);
       return;
     }
     setConfirmDialogOpen(true);
   };
 
-  const handleConfirmPurchase = () => {
-    const result = acheter(composantId);
-    if (result.success) {
+  const handleConfirmPurchase = async (): Promise<{ success: boolean; message: string }> => {
+    try {
+      await acheterMut.mutateAsync(composantId);
       showToast('Achat confirmé. Retrouvez votre commande dans Mes commandes.', 'success');
       navigate('/commandes');
+      return { success: true, message: '' };
+    } catch (e: unknown) {
+      return { success: false, message: (e as { message?: string })?.message ?? "Cet article vient d'être vendu." };
     }
-    return result;
   };
 
   const sectionLabel: React.CSSProperties = {
@@ -660,10 +684,9 @@ export default function EquipementDetailPage() {
                 <EquipmentCard
                   key={rec.id}
                   composant={rec}
-                  categorie={state.categories.find(c => c.id === rec.categorieId)}
-                  isFavori={state.favoris.includes(rec.id)}
-                  onToggleFavori={() => toggleFavori(rec.id)}
-                  etapesCount={state.etapes.filter(e => e.composantId === rec.id).length}
+                  categorie={categories.find(c => c.id === rec.categorieId)}
+                  isFavori={favorisIds.has(rec.id)}
+                  onToggleFavori={() => handleFavoriToggle(rec.id)}
                   onClick={() => navigate(`/equipement/${rec.id}`)}
                 />
               ))}

@@ -112,16 +112,15 @@ function SideNavItem({ item }: { item: NavItem }) {
 // ─── AdminLayout ──────────────────────────────────────────────────────────────
 
 export default function AdminLayout() {
-  const { state, logout } = useApp();
+  const { logout } = useApp();
   const navigate = useNavigate();
 
-  const enAttenteCount = state.offres.filter(
-    (o) => o.statut === 'EN_ATTENTE',
-  ).length;
+  // TODO(admin integration): wire to the offres EN_ATTENTE count via React Query.
+  const enAttenteCount = 0;
 
   const handleLogout = () => {
     logout();
-    navigate('/auth', { replace: true });
+    navigate('/connexion', { replace: true });
   };
 
   const navItems: NavItem[] = [

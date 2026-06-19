@@ -1,4 +1,5 @@
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { AppProvider, useApp } from './store/AppContext';
 
@@ -25,16 +26,15 @@ import ItemEditorPage from './pages/admin/ItemEditorPage';
 // ---------------------------------------------------------------------------
 
 function ProtectedRoute() {
-  
-  // const { state } = useApp();
-  // return state.isAuthenticated ? <Outlet /> : <Navigate to="/connexion" replace />;
-  return <Outlet />
+  const { isAuthenticated, authReady } = useApp();
+  if (!authReady) return null; // wait for session restore before deciding
+  return isAuthenticated ? <Outlet /> : <Navigate to="/connexion" replace />;
 }
 
 function AdminRoute() {
-  // const { state } = useApp();
-  // return state.isAdmin ? <Outlet /> : <Navigate to="/" replace />;
-  return <Outlet />
+  const { isAdmin, authReady } = useApp();
+  if (!authReady) return null;
+  return isAdmin ? <Outlet /> : <Navigate to="/" replace />;
 }
 
 // ---------------------------------------------------------------------------
@@ -81,12 +81,20 @@ function AppRoutes() {
 // Root export
 // ---------------------------------------------------------------------------
 
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: { retry: 1, staleTime: 30_000, refetchOnWindowFocus: false },
+  },
+});
+
 export default function App() {
   return (
-    <AppProvider>
-      <BrowserRouter>
-        <AppRoutes />
-      </BrowserRouter>
-    </AppProvider>
+    <QueryClientProvider client={queryClient}>
+      <AppProvider>
+        <BrowserRouter>
+          <AppRoutes />
+        </BrowserRouter>
+      </AppProvider>
+    </QueryClientProvider>
   );
 }

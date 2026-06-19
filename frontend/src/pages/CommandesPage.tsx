@@ -1,13 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../store/AppContext';
+import { useLogin } from '../hooks/auth';
+import { useCommandes } from '../hooks/commandes';
+import { useComposants } from '../hooks/composants';
 import { WarrantyStatus } from '../components/shared/WarrantyStatus';
 import PriceTag from '../components/shared/PriceTag';
 
 // ─── AuthPrompt ───────────────────────────────────────────────────────────────
 
 function AuthPrompt() {
-  const { login } = useApp();
+  const loginMut = useLogin();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
@@ -26,7 +29,7 @@ function AuthPrompt() {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    login(email, password);
+    loginMut.mutate({ email, password });
   };
 
   return (
@@ -284,10 +287,19 @@ function CommandeRow({
 // ─── CommandesPage ────────────────────────────────────────────────────────────
 
 export default function CommandesPage() {
-  const { state } = useApp();
+  const { isAuthenticated } = useApp();
   const navigate = useNavigate();
+  const { data: commandesData, isLoading } = useCommandes();
+  const { data: composantsData } = useComposants({});
 
-  if (!state.currentClient) {
+  const composantsById = useMemo(() => {
+    const list = composantsData ?? [];
+    const map = new Map<number, (typeof list)[number]>();
+    list.forEach(c => map.set(c.id, c));
+    return map;
+  }, [composantsData]);
+
+  if (!isAuthenticated) {
     return (
       <div style={{ backgroundColor: 'var(--atelier)', minHeight: '100vh' }}>
         <AuthPrompt />
@@ -295,10 +307,15 @@ export default function CommandesPage() {
     );
   }
 
-  const clientCommandeIds = state.currentClient.commandes ?? [];
-  const commandes = state.commandes
-    .filter(cmd => clientCommandeIds.includes(cmd.id))
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  if (isLoading) {
+    return (
+      <div style={{ backgroundColor: 'var(--atelier)', minHeight: '100vh', padding: '64px 24px', textAlign: 'center', color: 'var(--steel)', fontFamily: "'IBM Plex Sans', sans-serif" }}>
+        Chargement de vos commandes…
+      </div>
+    );
+  }
+
+  const commandes = commandesData ?? [];
 
   return (
     <div style={{ backgroundColor: 'var(--atelier)', minHeight: '100vh' }}>
@@ -386,7 +403,7 @@ export default function CommandesPage() {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {commandes.map(commande => {
-              const composant = state.composants.find(c => c.id === commande.composantId);
+              const composant = composantsById.get(commande.composantId);
               if (!composant) return null;
               return (
                 <CommandeRow

@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useApp } from '../store/AppContext';
+import { useLogin, useRegister } from '../hooks/auth';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -106,13 +106,14 @@ function ErrorBanner({ message }: { message: string }) {
 
 // ─── Submit button ────────────────────────────────────────────────────────────
 
-function SubmitButton({ label, onClick }: { label: string; onClick?: () => void }) {
+function SubmitButton({ label, onClick, disabled }: { label: string; onClick?: () => void; disabled?: boolean }) {
   return (
     <button
       type={onClick ? 'button' : 'submit'}
       onClick={onClick}
+      disabled={disabled}
       style={{
-        background: 'var(--verdigris)',
+        background: disabled ? 'var(--steel)' : 'var(--verdigris)',
         color: '#fff',
         border: 'none',
         borderRadius: 4,
@@ -120,7 +121,7 @@ function SubmitButton({ label, onClick }: { label: string; onClick?: () => void 
         fontSize: 14,
         fontWeight: 600,
         fontFamily: "'IBM Plex Sans', sans-serif",
-        cursor: 'pointer',
+        cursor: disabled ? 'not-allowed' : 'pointer',
         width: '100%',
         transition: 'background 0.15s',
         letterSpacing: '0.01em',
@@ -142,7 +143,8 @@ interface AuthFormsProps {
 }
 
 function AuthForms({ defaultTab = 'connexion', onSuccess, compact = false }: AuthFormsProps) {
-  const { login, register } = useApp();
+  const loginMut = useLogin();
+  const registerMut = useRegister();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -150,23 +152,32 @@ function AuthForms({ defaultTab = 'connexion', onSuccess, compact = false }: Aut
   const [form, setForm] = useState<AuthFormState>({ email: '', password: '', nom: '' });
   const [error, setError] = useState('');
 
+  const busy = loginMut.isPending || registerMut.isPending;
+
   const set = useCallback((key: keyof AuthFormState) => (v: string) => {
     setForm((prev) => ({ ...prev, [key]: v }));
     setError('');
   }, []);
+
+  const afterAuth = (isAdmin: boolean) => {
+    if (onSuccess) return onSuccess();
+    if (isAdmin) return navigate('/admin');
+    const from = (location.state as { from?: string })?.from ?? '/';
+    navigate(from);
+  };
 
   const handleConnexion = () => {
     if (!form.email.trim() || !form.password) {
       setError('Renseignez votre adresse e-mail et votre mot de passe.');
       return;
     }
-    login(form.email.trim(), form.password);
-    if (onSuccess) {
-      onSuccess();
-    } else {
-      const from = (location.state as { from?: string })?.from ?? '/';
-      navigate(from);
-    }
+    loginMut.mutate(
+      { email: form.email.trim(), password: form.password },
+      {
+        onSuccess: ({ user }) => afterAuth(user.role === 'ADMINISTRATEUR'),
+        onError: (e: unknown) => setError((e as { message?: string })?.message ?? 'Échec de la connexion.'),
+      },
+    );
   };
 
   const handleInscription = () => {
@@ -182,12 +193,13 @@ function AuthForms({ defaultTab = 'connexion', onSuccess, compact = false }: Aut
       setError('Le mot de passe doit comporter au moins 8 caractères.');
       return;
     }
-    register(form.nom.trim(), form.email.trim(), form.password);
-    if (onSuccess) {
-      onSuccess();
-    } else {
-      navigate('/');
-    }
+    registerMut.mutate(
+      { nom: form.nom.trim(), email: form.email.trim(), password: form.password },
+      {
+        onSuccess: () => afterAuth(false),
+        onError: (e: unknown) => setError((e as { message?: string })?.message ?? "Échec de l'inscription."),
+      },
+    );
   };
 
   const tabStyle = (active: boolean): React.CSSProperties => ({
@@ -283,7 +295,7 @@ function AuthForms({ defaultTab = 'connexion', onSuccess, compact = false }: Aut
               </span>
             </div>
 
-            <SubmitButton label="Se connecter" onClick={handleConnexion} />
+            <SubmitButton label={busy ? 'Connexion…' : 'Se connecter'} onClick={handleConnexion} disabled={busy} />
           </>
         )}
 
@@ -313,7 +325,7 @@ function AuthForms({ defaultTab = 'connexion', onSuccess, compact = false }: Aut
               autoComplete="new-password"
               hint="8 caractères minimum."
             />
-            <SubmitButton label="S'inscrire" onClick={handleInscription} />
+            <SubmitButton label={busy ? 'Création…' : "S'inscrire"} onClick={handleInscription} disabled={busy} />
           </>
         )}
       </div>
