@@ -1,9 +1,10 @@
 import postgres from 'postgres';
+import env from './env.js'; // ensures dotenv has loaded before the pool is created
 
 let sql;
 
 if (!global._sql) {
-  const connectionString = process.env.SUPABASE_DB_URL;
+  const connectionString = env.databaseUrl;
 
   global._sql = postgres(connectionString, {
     max: 20,

@@ -41,7 +41,8 @@ export async function list(filters, lang) {
     select o.*,
            e.nom     as entreprise_nom,
            e.contact as entreprise_contact,
-           e.adresse as entreprise_adresse
+           e.adresse as entreprise_adresse,
+           (select c.id from composant c where c.offre_id = o.id order by c.id limit 1) as composant_id
     from offre o
     join entreprise e on e.id = o.entreprise_id
     ${where}
@@ -79,9 +80,8 @@ export async function accepter(offreId, lang) {
       offre_id: offre.id,
     };
     const [composant] = await tx`insert into composant ${tx(cols)} returning *`;
-    await tx`
-      update offre set statut = 'ACCEPTEE', composant_id = ${composant.id} where id = ${offreId}
-    `;
+    // Lineage is composant.offre_id (set above); offre has no composant_id column.
+    await tx`update offre set statut = 'ACCEPTEE' where id = ${offreId}`;
     return toComposant(composant, lang);
   });
 }
