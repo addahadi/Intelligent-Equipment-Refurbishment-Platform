@@ -1,0 +1,330 @@
+### =====================================================================
+###  Plateforme de reconditionnement — API example calls
+###  For the VS Code "REST Client" extension (humao.rest-client).
+###  Run a request by clicking "Send Request" above each ### block.
+###
+###  Flow: run "Login (admin)" or "Login (client)" first — they capture
+###  the JWT into @adminToken / @clientToken via the named-request refs
+###  below, so the protected calls just work.
+### =====================================================================
+
+@baseUrl = http://localhost:3099/api
+@lang = fr
+
+### ---------------------------------------------------------------------
+### HEALTH
+### ---------------------------------------------------------------------
+
+GET {{baseUrl}}/health
+
+
+### =====================================================================
+### AUTH
+### =====================================================================
+
+### Register a client (returns { token, user })
+# @name registerClient
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "nom": "Youcef Missoum",
+  "email": "client@example.com",
+  "password": "secret123",
+  "telephone": "0550000000",
+  "adresse": "12 rue des Ateliers, Alger"
+}
+
+### Login as client — captures the token
+# @name loginClient
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "client@example.com",
+  "password": "secret123"
+}
+
+### Login as admin (seeded via `npm run seed`) — captures the token
+# @name loginAdmin
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@reconditionnement.fr",
+  "password": "change_me"
+}
+
+### Tokens captured from the login responses above
+@clientToken = {{loginClient.response.body.token}}
+@adminToken = {{loginAdmin.response.body.token}}
+
+### Current identity (client)
+GET {{baseUrl}}/auth/me
+Authorization: Bearer {{clientToken}}
+
+### Current identity (admin)
+GET {{baseUrl}}/auth/me
+Authorization: Bearer {{adminToken}}
+
+
+### =====================================================================
+### CATEGORIES
+### =====================================================================
+
+### List categories (public)
+GET {{baseUrl}}/categories?lang={{lang}}
+
+### Create a category (admin) — libelle → both columns unless libelleAr given
+POST {{baseUrl}}/categories?lang={{lang}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "libelle": "Compresseur",
+  "libelleAr": "ضاغط"
+}
+
+### Delete a category (admin)
+DELETE {{baseUrl}}/categories/5
+Authorization: Bearer {{adminToken}}
+
+
+### =====================================================================
+### COMPOSANTS — catalogue / inventory / detail / lifecycle
+### =====================================================================
+
+### Catalogue: items en vente, filtered + sorted (public)
+GET {{baseUrl}}/composants?etat=EN_VENTE&sort=recent&lang={{lang}}
+
+### Catalogue with full filter set (FR-06 search + FR-07 filters)
+GET {{baseUrl}}/composants?etat=EN_VENTE&search=moteur&categorieId=1&type=ORGANE&marque=Bosch&qualite=BON&prixMin=100&prixMax=5000&sort=prix_asc&lang={{lang}}
+
+### Admin inventory: omit `etat` to see every state
+GET {{baseUrl}}/composants?lang={{lang}}
+Authorization: Bearer {{adminToken}}
+
+### Composant detail
+GET {{baseUrl}}/composants/1?lang={{lang}}
+
+### Create an ORGANE (admin)
+POST {{baseUrl}}/composants?lang={{lang}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "typeComposant": "ORGANE",
+  "nom": "Moteur électrique 5kW",
+  "nomAr": "محرك كهربائي 5 كيلوواط",
+  "reference": "MOT-5KW-0001",
+  "marque": "Bosch",
+  "modele": "EM-5000",
+  "categorieId": 1,
+  "qualite": "TRES_BON",
+  "prix": 2500.00,
+  "garantie": 12,
+  "images": ["https://res.cloudinary.com/demo/image/upload/sample.jpg"],
+  "description": "Moteur reconditionné, testé.",
+  "typeEquipement": "Pompe industrielle"
+}
+
+### Create a PIECE (admin)
+POST {{baseUrl}}/composants?lang={{lang}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "typeComposant": "PIECE",
+  "nom": "Roulement à billes",
+  "reference": "PCE-RLT-0001",
+  "marque": "SKF",
+  "categorieId": 2,
+  "qualite": "COMME_NEUF",
+  "prix": 80.00,
+  "garantie": 6,
+  "materiau": "Acier inoxydable",
+  "compatibilite": "Série EM-5000"
+}
+
+### Update a composant (admin, partial)
+PATCH {{baseUrl}}/composants/1?lang={{lang}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "prix": 2300.00,
+  "qualite": "BON"
+}
+
+### Buy a composant (client) — calls acheter_composant(); 409 if already sold
+POST {{baseUrl}}/composants/1/acheter
+Authorization: Bearer {{clientToken}}
+
+### Declare salvageable child pieces under a parent organe (admin, FR-32)
+POST {{baseUrl}}/composants/1/pieces?lang={{lang}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "pieces": [
+    {
+      "nom": "Stator récupéré",
+      "reference": "PCE-STA-0001",
+      "prix": 0,
+      "materiau": "Cuivre",
+      "compatibilite": "EM-5000"
+    },
+    {
+      "nom": "Carcasse alu",
+      "reference": "PCE-CAR-0001",
+      "prix": 0,
+      "materiau": "Aluminium"
+    }
+  ]
+}
+
+
+### =====================================================================
+### ETAPES (traçabilité)
+### =====================================================================
+
+### List a composant's traceability timeline
+GET {{baseUrl}}/composants/1/etapes?lang={{lang}}
+
+### Add a step (admin). ordre defaults to next slot if omitted.
+POST {{baseUrl}}/composants/1/etapes?lang={{lang}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "type": "DIAGNOSTIC",
+  "date": "2026-06-19",
+  "description": "Bobinage testé, isolement conforme."
+}
+
+### Add the terminal MISE_EN_VENTE step (FR-33: flips etat → EN_VENTE)
+POST {{baseUrl}}/composants/1/etapes?lang={{lang}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "type": "MISE_EN_VENTE",
+  "date": "2026-06-19"
+}
+
+### Update a step (admin)
+PATCH {{baseUrl}}/etapes/1?lang={{lang}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "description": "Diagnostic révisé."
+}
+
+### Reorder a step up/down (admin, temp-value swap) → returns full timeline
+POST {{baseUrl}}/etapes/2/reorder?lang={{lang}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "direction": "up"
+}
+
+### Delete a step (admin)
+DELETE {{baseUrl}}/etapes/1
+Authorization: Bearer {{adminToken}}
+
+
+### =====================================================================
+### OFFRES
+### =====================================================================
+
+### Submit an offer (public, FR-17) — creates entreprise + offre
+POST {{baseUrl}}/offres?lang={{lang}}
+Content-Type: application/json
+
+{
+  "designation": "Lot de moteurs hors service",
+  "designationAr": "مجموعة محركات معطلة",
+  "typePropose": "ORGANE",
+  "marque": "Siemens",
+  "modele": "SX-200",
+  "reference": "LOT-2026-001",
+  "categorieId": 1,
+  "etatDeclare": "DEFECTUEUX",
+  "prixPropose": 1200.00,
+  "description": "5 unités, à reconditionner.",
+  "images": [],
+  "entreprise": {
+    "nom": "Atelier Méca SARL",
+    "contact": "contact@ateliermeca.dz",
+    "adresse": "Zone industrielle, Oran"
+  }
+}
+
+### List offers (admin), optionally filter by statut
+GET {{baseUrl}}/offres?statut=EN_ATTENTE&lang={{lang}}
+Authorization: Bearer {{adminToken}}
+
+### Accept an offer (admin, FR-22) → returns the new EN_RECONDITIONNEMENT composant
+POST {{baseUrl}}/offres/1/accepter?lang={{lang}}
+Authorization: Bearer {{adminToken}}
+
+### Reject an offer (admin)
+POST {{baseUrl}}/offres/1/rejeter?lang={{lang}}
+Authorization: Bearer {{adminToken}}
+
+
+### =====================================================================
+### FAVORIS (client)
+### =====================================================================
+
+### List favourite composants (full objects)
+GET {{baseUrl}}/favoris?lang={{lang}}
+Authorization: Bearer {{clientToken}}
+
+### Add to favourites (idempotent)
+PUT {{baseUrl}}/favoris/1
+Authorization: Bearer {{clientToken}}
+
+### Remove from favourites
+DELETE {{baseUrl}}/favoris/1
+Authorization: Bearer {{clientToken}}
+
+
+### =====================================================================
+### COMMANDES
+### =====================================================================
+
+### List orders — client sees own, admin sees all
+GET {{baseUrl}}/commandes
+Authorization: Bearer {{clientToken}}
+
+
+### =====================================================================
+### UPLOADS  (auth) — multipart; returns { urls: [...] }
+###   In REST Client, file paths are relative to this .http file.
+### =====================================================================
+
+POST {{baseUrl}}/uploads
+Authorization: Bearer {{adminToken}}
+Content-Type: multipart/form-data; boundary=----boundary
+
+------boundary
+Content-Disposition: form-data; name="folder"
+
+reconditionnement/composants
+------boundary
+Content-Disposition: form-data; name="files"; filename="sample.jpg"
+Content-Type: image/jpeg
+
+< ./sample.jpg
+------boundary--
+
+
+### =====================================================================
+### STATS (admin dashboard, FR-34)
+### =====================================================================
+
+GET {{baseUrl}}/stats
+Authorization: Bearer {{adminToken}}

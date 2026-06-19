@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls -la /d/Start-up*/diagrams/)",
+      "Bash(cat /d/Start-up*/specification_ui_ux.md)",
+      "Bash(ls /d/Start-up*/diagrams/)",
+      "Bash(file /d/Start-up*/diagrams/*.png)",
+      "Bash(cp \"/d/Start-up de reconditionnement intelligent d'équipement/diagrams/diagramme_classes.png\" \"C:/Users/hecin/AppData/Local/Temp/claude/D--Start-up-de-reconditionnement-intelligent-d--quipement/f0475a50-2976-40b9-a1d7-9aa3bd914e86/scratchpad/diagramme_classes.png\")",
+      "Bash(cp \"/d/Start-up de reconditionnement intelligent d'équipement/diagrams/cas_utilisation.png\" \"C:/Users/hecin/AppData/Local/Temp/claude/D--Start-up-de-reconditionnement-intelligent-d--quipement/f0475a50-2976-40b9-a1d7-9aa3bd914e86/scratchpad/cas_utilisation.png\")",
+      "Bash(cp \"/d/Start-up de reconditionnement intelligent d'équipement/diagrams/sequence_achat_client.png\" \"C:/Users/hecin/AppData/Local/Temp/claude/D--Start-up-de-reconditionnement-intelligent-d--quipement/f0475a50-2976-40b9-a1d7-9aa3bd914e86/scratchpad/sequence_achat_client.png\")",
+      "Bash(cp \"/d/Start-up de reconditionnement intelligent d'équipement/diagrams/sequence_offre_reconditionnement.png\" \"C:/Users/hecin/AppData/Local/Temp/claude/D--Start-up-de-reconditionnement-intelligent-d--quipement/f0475a50-2976-40b9-a1d7-9aa3bd914e86/scratchpad/sequence_offre_reconditionnement.png\")",
+      "Bash(ls -d /d/Start-up*)",
+      "Bash(cp __CMDSUB_OUTPUT__/diagrams/diagramme_classes.png C:/Users/hecin/AppData/Local/Temp/claude/D--Start-up-de-reconditionnement-intelligent-d--quipement/f0475a50-2976-40b9-a1d7-9aa3bd914e86/scratchpad/diagramme_classes.png)",
+      "Bash(cp __CMDSUB_OUTPUT__/diagrams/cas_utilisation.png C:/Users/hecin/AppData/Local/Temp/claude/D--Start-up-de-reconditionnement-intelligent-d--quipement/f0475a50-2976-40b9-a1d7-9aa3bd914e86/scratchpad/cas_utilisation.png)",
+      "Bash(cp __CMDSUB_OUTPUT__/diagrams/sequence_achat_client.png C:/Users/hecin/AppData/Local/Temp/claude/D--Start-up-de-reconditionnement-intelligent-d--quipement/f0475a50-2976-40b9-a1d7-9aa3bd914e86/scratchpad/sequence_achat_client.png)",
+      "Bash(cp __CMDSUB_OUTPUT__/diagrams/sequence_offre_reconditionnement.png C:/Users/hecin/AppData/Local/Temp/claude/D--Start-up-de-reconditionnement-intelligent-d--quipement/f0475a50-2976-40b9-a1d7-9aa3bd914e86/scratchpad/sequence_offre_reconditionnement.png)",
+      "Bash(cd /d/Start-up*/frontend)",
+      "Bash(npm install *)",
+      "Skill(artifact-design)"
+    ]
+  }
+}

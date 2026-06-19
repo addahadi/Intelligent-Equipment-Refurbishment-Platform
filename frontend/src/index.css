@@ -1,0 +1,45 @@
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --atelier: #EEF1F2;
+  --panel: #FAFBFB;
+  --graphite: #18211F;
+  --steel: #6E7A80;
+  --rule: #DCE1E2;
+  --verdigris: #1C7A62;
+  --verdigris-700: #155C4B;
+  --verdigris-50: #E7F2EE;
+  --brass: #A87C2A;
+  --brass-50: #F4EDDD;
+  --oxide: #9C4A2C;
+  --oxide-50: #F2E4DD;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background-color: var(--atelier);
+  color: var(--graphite);
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 16px;
+  line-height: 1.55;
+  margin: 0;
+}
+
+:focus-visible {
+  outline: 2px solid var(--verdigris);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
