@@ -1,7 +1,8 @@
 // FILE 2: OffresPage.tsx
 // Offer management — list + detail split layout
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
+import { useOffres, useAccepterOffre, useRejeterOffre } from "../../hooks/offres";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -24,98 +25,6 @@ interface Offre {
   adresse: string;
   images: string[];
 }
-
-// ─── Mock data ────────────────────────────────────────────────────────────────
-
-const MOCK_OFFRES: Offre[] = [
-  {
-    id: "off-001",
-    designation: "Alternateur Bosch 24V 100A",
-    entreprise: "Transports Benoît SARL",
-    type: "VENTE",
-    prixPropose: 85,
-    date: "2026-06-17",
-    statut: "EN_ATTENTE",
-    description:
-      "Alternateur en bon état apparent, déposé lors d'une révision préventive. Câblage intact. Quelques traces de rouille superficielle sur le boîtier arrière.",
-    quantite: 1,
-    contact: "marc.benoit@transports-benoit.fr",
-    adresse: "12 rue de l'Industrie, 69800 Saint-Priest",
-    images: [],
-  },
-  {
-    id: "off-002",
-    designation: "Compresseur d'air industriel 50L",
-    entreprise: "Ateliers Dupont & Fils",
-    type: "VENTE",
-    prixPropose: 320,
-    date: "2026-06-16",
-    statut: "EN_ATTENTE",
-    description:
-      "Compresseur fonctionnel, réservoir 50L, pression max 10 bar. Dernière révision il y a 8 mois. Vendu suite à modernisation atelier.",
-    quantite: 1,
-    contact: "contact@ateliers-dupont.fr",
-    adresse: "4 avenue Foch, 42000 Saint-Étienne",
-    images: [],
-  },
-  {
-    id: "off-003",
-    designation: "Lot de 6 moteurs électriques Siemens 1.5kW",
-    entreprise: "MCA Industrie",
-    type: "VENTE",
-    prixPropose: 540,
-    date: "2026-06-15",
-    statut: "EN_ATTENTE",
-    description:
-      "Moteurs tri 1,5 kW 1400 tr/min. Stockés en entrepôt sec. État variable : 4 fonctionnels, 2 à diagnostiquer. Lot indivisible.",
-    quantite: 6,
-    contact: "logistique@mca-industrie.com",
-    adresse: "ZI Les Bruyères, 38120 Saint-Égrève",
-    images: [],
-  },
-  {
-    id: "off-004",
-    designation: "Démarreur Valeo 12V",
-    entreprise: "Garage Central Mécanique",
-    type: "DON",
-    prixPropose: null,
-    date: "2026-06-14",
-    statut: "EN_ATTENTE",
-    description: "Démarreur en panne, origine inconnue. Donné pour pièces.",
-    quantite: 1,
-    contact: "garage.central@orange.fr",
-    adresse: "7 bd Michelet, 13008 Marseille",
-    images: [],
-  },
-  {
-    id: "off-005",
-    designation: "Radiateur hydraulique 120x60cm",
-    entreprise: "BTP Gironde",
-    type: "VENTE",
-    prixPropose: 190,
-    date: "2026-06-10",
-    statut: "ACCEPTEE",
-    description: "Radiateur hydraulique déposé d'engin TP. Connexions 3/4\".",
-    quantite: 1,
-    contact: "materiel@btp-gironde.fr",
-    adresse: "Parc d'activités, 33290 Blanquefort",
-    images: [],
-  },
-  {
-    id: "off-006",
-    designation: "Batterie AGM 12V 110Ah",
-    entreprise: "Flotte Véhicules Sud",
-    type: "VENTE",
-    prixPropose: 65,
-    date: "2026-06-08",
-    statut: "REJETEE",
-    description: "Batterie déchargée profonde, capacité résiduelle inconnue.",
-    quantite: 2,
-    contact: "cession@fvs.fr",
-    adresse: "20 rue Volta, 31100 Toulouse",
-    images: [],
-  },
-];
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
 
@@ -587,10 +496,31 @@ function DetailPanel({ offre, onAccepter, onRejeter }: DetailPanelProps) {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function OffresPage() {
-  const [offres, setOffres] = useState<Offre[]>(MOCK_OFFRES);
-  const [selectedId, setSelectedId] = useState<string | null>(
-    MOCK_OFFRES.find((o) => o.statut === "EN_ATTENTE")?.id ?? null
+  const { data: apiOffres } = useOffres();
+  const accepterMut = useAccepterOffre();
+  const rejeterMut = useRejeterOffre();
+
+  // Adapt the API offre shape onto this screen's local interface.
+  const offres: Offre[] = useMemo(
+    () =>
+      (apiOffres ?? []).map((o) => ({
+        id: String(o.id),
+        designation: o.designation,
+        entreprise: o.entreprise?.nom ?? `Entreprise #${o.entrepriseId}`,
+        type: (o.prixPropose && o.prixPropose > 0 ? "VENTE" : "DON") as TypeOffre,
+        prixPropose: o.prixPropose ?? null,
+        date: o.dateOffre,
+        statut: o.statut,
+        description: o.description ?? "",
+        quantite: 1,
+        contact: o.entreprise?.contact ?? "",
+        adresse: o.entreprise?.adresse ?? "",
+        images: o.images,
+      })),
+    [apiOffres]
   );
+
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [tab, setTab] = useState<TabFilter>("EN_ATTENTE");
   const [sortKey, setSortKey] = useState<keyof Offre>("date");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -598,6 +528,13 @@ export default function OffresPage() {
     message: string;
     type: "success" | "error";
   } | null>(null);
+
+  // Default the selection to the first pending offer once data arrives.
+  useEffect(() => {
+    if (selectedId === null && offres.length > 0) {
+      setSelectedId(offres.find((o) => o.statut === "EN_ATTENTE")?.id ?? offres[0].id);
+    }
+  }, [offres, selectedId]);
 
   const filtered = useMemo(() => {
     const base =
@@ -621,25 +558,24 @@ export default function OffresPage() {
   }
 
   function rejeterOffre(id: string) {
-    setOffres((prev) =>
-      prev.map((o) => (o.id === id ? { ...o, statut: "REJETEE" } : o))
-    );
-    setToast({ message: "Offre rejetée.", type: "error" });
+    rejeterMut.mutate(Number(id), {
+      onSuccess: () => setToast({ message: "Offre rejetée.", type: "error" }),
+      onError: (e: unknown) =>
+        setToast({ message: (e as { message?: string })?.message ?? "Échec.", type: "error" }),
+    });
   }
 
   function accepterOffre(id: string) {
-    const newId = `comp-${Date.now()}`;
-    setOffres((prev) =>
-      prev.map((o) => (o.id === id ? { ...o, statut: "ACCEPTEE" } : o))
-    );
-    setToast({
-      message: `Offre acceptée — composant ${newId} créé.`,
-      type: "success",
+    accepterMut.mutate(Number(id), {
+      onSuccess: (composant) => {
+        setToast({ message: `Offre acceptée — composant créé.`, type: "success" });
+        setTimeout(() => {
+          window.location.href = `/admin/inventaire/${composant.id}`;
+        }, 1200);
+      },
+      onError: (e: unknown) =>
+        setToast({ message: (e as { message?: string })?.message ?? "Échec.", type: "error" }),
     });
-    // In production: navigate(`/admin/inventaire/${newId}`)
-    setTimeout(() => {
-      window.location.href = `/admin/inventaire/${newId}`;
-    }, 1400);
   }
 
   function SortIcon({ field }: { field: keyof Offre }) {

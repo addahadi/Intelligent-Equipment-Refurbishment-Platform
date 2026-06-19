@@ -35,8 +35,18 @@ export async function submit(body, lang) {
 
 export async function list(filters, lang) {
   const { statut } = filters;
-  const where = statut ? sql`where statut = ${statut}` : sql``;
-  const rows = await sql`select * from offre ${where} order by date_offre desc, id desc`;
+  const where = statut ? sql`where o.statut = ${statut}` : sql``;
+  // Join the entreprise so the admin review panel can show name/contact/address.
+  const rows = await sql`
+    select o.*,
+           e.nom     as entreprise_nom,
+           e.contact as entreprise_contact,
+           e.adresse as entreprise_adresse
+    from offre o
+    join entreprise e on e.id = o.entreprise_id
+    ${where}
+    order by o.date_offre desc, o.id desc
+  `;
   return rows.map((r) => toOffre(r, lang));
 }
 

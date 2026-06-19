@@ -65,6 +65,14 @@ export const offreSchema = z.object({
   statut: statutOffre,
   entrepriseId: z.number().nullable().optional(),
   composantId: z.number().optional(),
+  entreprise: z
+    .object({
+      id: z.number().nullable().optional(),
+      nom: z.string(),
+      contact: z.string().nullable().transform((v) => v ?? ''),
+      adresse: z.string().optional(),
+    })
+    .optional(),
 })
 
 export const commandeSchema = z.object({
@@ -75,6 +83,10 @@ export const commandeSchema = z.object({
   prix: z.number(),
   statut: statutCommande,
   dateFinGarantie: z.string().nullable().transform((v) => v ?? ''),
+  client: z.object({ nom: z.string(), email: z.string() }).optional(),
+  composant: z
+    .object({ nom: z.string(), reference: z.string(), garantie: z.number() })
+    .optional(),
 })
 
 export const userSchema = z.object({

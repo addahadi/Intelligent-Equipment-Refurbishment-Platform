@@ -1,7 +1,10 @@
 // FILE 5: CategoriesPage.tsx
 // Category management + Ventes page (two exports in one file)
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
+import { useCategories, useCreateCategorie, useDeleteCategorie } from "../../hooks/categories";
+import { useComposants } from "../../hooks/composants";
+import { useCommandes } from "../../hooks/commandes";
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
 
@@ -61,21 +64,28 @@ interface Categorie {
   count: number; // number of composants in this category
 }
 
-const MOCK_CATEGORIES: Categorie[] = [
-  { id: "cat-1", libelle: "Électrique", count: 14 },
-  { id: "cat-2", libelle: "Hydraulique", count: 9 },
-  { id: "cat-3", libelle: "Pneumatique", count: 6 },
-  { id: "cat-4", libelle: "Motorisation", count: 11 },
-  { id: "cat-5", libelle: "Transmission", count: 5 },
-  { id: "cat-6", libelle: "Refroidissement", count: 3 },
-  { id: "cat-7", libelle: "Carrosserie", count: 2 },
-];
-
 export function CategoriesPage() {
-  const [categories, setCategories] = useState<Categorie[]>(MOCK_CATEGORIES);
+  const { data: catsData } = useCategories();
+  const { data: composantsData } = useComposants({});
+  const createMut = useCreateCategorie();
+  const deleteMut = useDeleteCategorie();
+
   const [newLibelle, setNewLibelle] = useState("");
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Derive per-category composant counts (the API doesn't return them).
+  const categories: Categorie[] = useMemo(() => {
+    const counts = new Map<number, number>();
+    (composantsData ?? []).forEach((c) => {
+      if (c.categorieId != null) counts.set(c.categorieId, (counts.get(c.categorieId) ?? 0) + 1);
+    });
+    return (catsData ?? []).map((c) => ({
+      id: String(c.id),
+      libelle: c.libelle,
+      count: counts.get(c.id) ?? 0,
+    }));
+  }, [catsData, composantsData]);
 
   function handleAdd() {
     const trimmed = newLibelle.trim();
@@ -83,25 +93,21 @@ export function CategoriesPage() {
       setError("Le libellé ne peut pas être vide.");
       return;
     }
-    if (
-      categories.some(
-        (c) => c.libelle.toLowerCase() === trimmed.toLowerCase()
-      )
-    ) {
+    if (categories.some((c) => c.libelle.toLowerCase() === trimmed.toLowerCase())) {
       setError(`La catégorie « ${trimmed} » existe déjà.`);
       return;
     }
-    setCategories((prev) => [
-      ...prev,
-      { id: `cat-${Date.now()}`, libelle: trimmed, count: 0 },
-    ]);
-    setNewLibelle("");
-    setError(null);
+    createMut.mutate(
+      { libelle: trimmed },
+      {
+        onSuccess: () => { setNewLibelle(""); setError(null); },
+        onError: (e: unknown) => setError((e as { message?: string })?.message ?? "Échec de l'ajout."),
+      },
+    );
   }
 
   function handleDeleteConfirm(id: string) {
-    setCategories((prev) => prev.filter((c) => c.id !== id));
-    setConfirmDeleteId(null);
+    deleteMut.mutate(Number(id), { onSuccess: () => setConfirmDeleteId(null) });
   }
 
   const categoryToDelete = categories.find((c) => c.id === confirmDeleteId);
@@ -485,53 +491,6 @@ interface Commande {
   warrantyState: WarrantyState;
 }
 
-const MOCK_COMMANDES: Commande[] = [
-  {
-    id: "cmd-001",
-    clientNom: "Ingénierie Bertrand SAS",
-    clientEmail: "achats@bertrand-ing.fr",
-    itemNom: "Pompe hydraulique à pistons",
-    itemReference: "PMP-HYD-BOH-A10",
-    date: "2026-04-12",
-    prix: 420,
-    garantieMois: 6,
-    warrantyState: "ACTIVE",
-  },
-  {
-    id: "cmd-002",
-    clientNom: "Chantiers Navarre",
-    clientEmail: "materiel@navarre-tp.com",
-    itemNom: "Réducteur de vitesse 1:20",
-    itemReference: "RED-1-20-SEW",
-    date: "2026-05-03",
-    prix: 310,
-    garantieMois: 3,
-    warrantyState: "BIENTOT",
-  },
-  {
-    id: "cmd-003",
-    clientNom: "Atelier Mécanique Plancher",
-    clientEmail: "plancher.mec@orange.fr",
-    itemNom: "Alternateur 24V 100A",
-    itemReference: "ALT-24V-100A-BSH",
-    date: "2025-10-28",
-    prix: 145,
-    garantieMois: 6,
-    warrantyState: "EXPIREE",
-  },
-  {
-    id: "cmd-004",
-    clientNom: "Travaux Publics du Var",
-    clientEmail: "logistique@tpvar.fr",
-    itemNom: "Variateur de fréquence 7.5kW",
-    itemReference: "VFD-7K5-SCH-ATV",
-    date: "2026-06-01",
-    prix: 680,
-    garantieMois: 12,
-    warrantyState: "ACTIVE",
-  },
-];
-
 function WarrantyStatus({
   state,
   mois,
@@ -578,8 +537,34 @@ function WarrantyStatus({
   );
 }
 
+function warrantyStateFrom(dateFinGarantie: string): WarrantyState {
+  if (!dateFinGarantie) return "EXPIREE";
+  const end = new Date(dateFinGarantie).getTime();
+  const now = Date.now();
+  if (end <= now) return "EXPIREE";
+  return (end - now) / 86_400_000 <= 31 ? "BIENTOT" : "ACTIVE";
+}
+
 export function VentesPage() {
-  const total = MOCK_COMMANDES.reduce((s, c) => s + c.prix, 0);
+  const { data: cmds } = useCommandes();
+
+  const commandes: Commande[] = useMemo(
+    () =>
+      (cmds ?? []).map((c) => ({
+        id: String(c.id),
+        clientNom: c.client?.nom ?? `Client #${c.clientId}`,
+        clientEmail: c.client?.email ?? "",
+        itemNom: c.composant?.nom ?? `Composant #${c.composantId}`,
+        itemReference: c.composant?.reference ?? "",
+        date: c.date,
+        prix: c.prix,
+        garantieMois: c.composant?.garantie ?? 0,
+        warrantyState: warrantyStateFrom(c.dateFinGarantie),
+      })),
+    [cmds]
+  );
+
+  const total = commandes.reduce((s, c) => s + c.prix, 0);
 
   return (
     <DesktopGate>
@@ -719,7 +704,7 @@ export function VentesPage() {
 
         {/* Table */}
         <div className="ventes-content">
-          {MOCK_COMMANDES.length === 0 ? (
+          {commandes.length === 0 ? (
             <div
               style={{
                 display: "flex",
@@ -766,7 +751,7 @@ export function VentesPage() {
                 </tr>
               </thead>
               <tbody>
-                {MOCK_COMMANDES.map((cmd) => (
+                {commandes.map((cmd) => (
                   <tr key={cmd.id}>
                     <td>
                       <div style={{ fontWeight: 500 }}>{cmd.clientNom}</div>

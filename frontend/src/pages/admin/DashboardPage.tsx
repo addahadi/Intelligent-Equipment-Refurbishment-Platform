@@ -2,6 +2,7 @@
 // Admin dashboard — metric overview + conversion funnel
 
 import React from "react";
+import { useStats } from "../../hooks/stats";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -21,20 +22,11 @@ interface MetricsData {
 
 // ─── Mock data (replace with real API calls) ──────────────────────────────────
 
-const MOCK_METRICS: MetricsData = {
-  offres: {
-    EN_ATTENTE: 4,
-    ACCEPTEE: 31,
-    REJETEE: 7,
-  },
-  inventaire: {
-    EN_RECONDITIONNEMENT: 12,
-    EN_VENTE: 8,
-    VENDU: 47,
-    RECYCLE: 6,
-  },
-  revenuSimule: 18_420,
-  enVente: 8,
+const EMPTY_METRICS: MetricsData = {
+  offres: { EN_ATTENTE: 0, ACCEPTEE: 0, REJETEE: 0 },
+  inventaire: { EN_RECONDITIONNEMENT: 0, EN_VENTE: 0, VENDU: 0, RECYCLE: 0 },
+  revenuSimule: 0,
+  enVente: 0,
 };
 
 // ─── Palette tokens ───────────────────────────────────────────────────────────
@@ -345,7 +337,8 @@ function FunnelBar({ label, count, max, color, sublabel }: FunnelBarProps) {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
-  const metrics = MOCK_METRICS;
+  const { data } = useStats();
+  const metrics: MetricsData = data ?? EMPTY_METRICS;
   const { offres, inventaire, revenuSimule, enVente } = metrics;
   const totalOffres = offres.EN_ATTENTE + offres.ACCEPTEE + offres.REJETEE;
   const funnelMax = Math.max(

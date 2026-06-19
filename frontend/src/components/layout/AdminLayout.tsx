@@ -9,6 +9,7 @@ import {
   LogOut,
 } from 'lucide-react';
 import { useApp } from '../../store/AppContext';
+import { useOffres } from '../../hooks/offres';
 
 // ─── Token constants (match index.css vars) ───────────────────────────────────
 
@@ -115,8 +116,8 @@ export default function AdminLayout() {
   const { logout } = useApp();
   const navigate = useNavigate();
 
-  // TODO(admin integration): wire to the offres EN_ATTENTE count via React Query.
-  const enAttenteCount = 0;
+  const { data: offresEnAttente } = useOffres('EN_ATTENTE');
+  const enAttenteCount = offresEnAttente?.length ?? 0;
 
   const handleLogout = () => {
     logout();

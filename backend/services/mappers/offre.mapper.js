@@ -18,5 +18,14 @@ export function toOffre(row, lang = 'fr') {
     statut: row.statut,
     entrepriseId: toNumber(row.entreprise_id),
     composantId: toNumber(row.composant_id) ?? undefined,
+    // Present only when the query joined entreprise (e.g. admin list).
+    entreprise: row.entreprise_nom
+      ? {
+          id: toNumber(row.entreprise_id),
+          nom: row.entreprise_nom,
+          contact: row.entreprise_contact,
+          adresse: row.entreprise_adresse ?? undefined,
+        }
+      : undefined,
   };
 }

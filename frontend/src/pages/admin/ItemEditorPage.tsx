@@ -1,7 +1,12 @@
 // FILE 4: ItemEditorPage.tsx
 // Item editor + traceability builder with two tabs
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import { useParams } from "react-router-dom";
+import { useComposant, useUpdateComposant, useDeclarePieces } from "../../hooks/composants";
+import { useEtapes, useCreateEtape, useDeleteEtape, useReorderEtape } from "../../hooks/etapes";
+import { useCategories } from "../../hooks/categories";
+import type { TypeEtape as ApiTypeEtape } from "../../types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1772,13 +1777,92 @@ function AttributsTab({ item, onUpdate, onSave }: AttributsTabProps) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
+// ─── API ⇄ local mapping helpers ────────────────────────────────────────────
+const QUALITE_API_TO_LOCAL: Record<string, Qualite> = {
+  COMME_NEUF: "NEUF", TRES_BON: "BON", BON: "BON", CORRECT: "CORRECT",
+};
+const QUALITE_LOCAL_TO_API: Record<Qualite, string> = {
+  NEUF: "COMME_NEUF", BON: "BON", CORRECT: "CORRECT", USAGE: "CORRECT",
+};
+// The API enum has DECOMPOSITION (no local) and lacks AUTRE.
+function etapeApiToLocal(t: ApiTypeEtape): TypeEtape {
+  return t === "DECOMPOSITION" ? "AUTRE" : (t as TypeEtape);
+}
+function etapeLocalToApi(t: TypeEtape): ApiTypeEtape {
+  return t === "AUTRE" ? "TEST" : (t as ApiTypeEtape);
+}
+
 export default function ItemEditorPage() {
+  const { id } = useParams<{ id: string }>();
+  const composantId = Number(id);
+
+  const { data: composant, isLoading } = useComposant(composantId);
+  const { data: etapesData } = useEtapes(composantId);
+  const { data: categoriesData } = useCategories();
+  const updateMut = useUpdateComposant();
+  const createEtapeMut = useCreateEtape();
+  const deleteEtapeMut = useDeleteEtape();
+  const reorderMut = useReorderEtape();
+  const declarePiecesMut = useDeclarePieces();
+
   const [item, setItem] = useState<ComposantData>(MOCK_ITEM);
   const [activeTab, setActiveTab] = useState<"attributs" | "tracabilite">(
     "attributs"
   );
   const [saved, setSaved] = useState(false);
   const [showDeclarePieces, setShowDeclarePieces] = useState(false);
+
+  const categories = categoriesData ?? [];
+  const catLibelle = (cid?: number | null) =>
+    cid != null ? categories.find((c) => c.id === cid)?.libelle ?? "" : "";
+  const catId = (libelle: string) =>
+    categories.find((c) => c.libelle.toLowerCase() === libelle.trim().toLowerCase())?.id;
+
+  // Load editable attribute fields once; re-sync server-derived state thereafter.
+  const loadedRef = useRef(false);
+  useEffect(() => {
+    if (!composant) return;
+    setItem((prev) => {
+      if (loadedRef.current) {
+        return { ...prev, etatActuel: composant.etatActuel };
+      }
+      loadedRef.current = true;
+      return {
+        id: String(composant.id),
+        nom: composant.nom,
+        reference: composant.reference,
+        marque: composant.marque ?? "",
+        modele: composant.modele ?? "",
+        categorie: catLibelle(composant.categorieId),
+        typeComposant: composant.typeComposant,
+        qualite: composant.qualite ? QUALITE_API_TO_LOCAL[composant.qualite] ?? "USAGE" : "USAGE",
+        prix: String(composant.prix ?? ""),
+        garantie: String(composant.garantie ?? ""),
+        description: composant.description ?? "",
+        typeEquipement: (composant as { typeEquipement?: string }).typeEquipement ?? "",
+        materiau: (composant as { materiau?: string }).materiau ?? "",
+        compatibilite: (composant as { compatibilite?: string }).compatibilite ?? "",
+        etatActuel: composant.etatActuel,
+        etapes: prev.etapes,
+        parentOrgane: null,
+      };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [composant, categoriesData]);
+
+  // Étapes are persisted immediately, so always mirror the server timeline.
+  useEffect(() => {
+    if (!etapesData) return;
+    setItem((prev) => ({
+      ...prev,
+      etapes: etapesData.map((e) => ({
+        id: String(e.id),
+        type: etapeApiToLocal(e.type),
+        date: e.date,
+        description: e.description,
+      })),
+    }));
+  }, [etapesData]);
 
   const hasRecyclage =
     item.typeComposant === "ORGANE" &&
@@ -1790,43 +1874,81 @@ export default function ItemEditorPage() {
   }
 
   function handleSave() {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
+    updateMut.mutate(
+      {
+        id: composantId,
+        input: {
+          nom: item.nom,
+          reference: item.reference,
+          marque: item.marque,
+          modele: item.modele,
+          categorieId: catId(item.categorie),
+          qualite: QUALITE_LOCAL_TO_API[item.qualite],
+          prix: item.prix ? Number(item.prix) : undefined,
+          garantie: item.garantie ? Number(item.garantie) : undefined,
+          description: item.description,
+          typeEquipement: item.typeComposant === "ORGANE" ? item.typeEquipement : undefined,
+          materiau: item.typeComposant === "PIECE" ? item.materiau : undefined,
+          compatibilite: item.typeComposant === "PIECE" ? item.compatibilite : undefined,
+        },
+      },
+      {
+        onSuccess: () => {
+          setSaved(true);
+          setTimeout(() => setSaved(false), 2500);
+        },
+      },
+    );
   }
 
   function handleAddEtape(etape: Omit<Etape, "id">) {
-    const newEtape: Etape = { ...etape, id: `et-${Date.now()}` };
-    setItem((prev) => ({
-      ...prev,
-      etapes: [...prev.etapes, newEtape],
-    }));
+    // BR-08: a DIAGNOSTIC verdict is carried in the description text.
+    const description = etape.verdict ? `[${etape.verdict}] ${etape.description}` : etape.description;
+    createEtapeMut.mutate({
+      composantId,
+      input: { type: etapeLocalToApi(etape.type), date: etape.date, description },
+    });
   }
 
   function handleDeleteEtape(id: string) {
-    setItem((prev) => ({
-      ...prev,
-      etapes: prev.etapes.filter((e) => e.id !== id),
-    }));
+    deleteEtapeMut.mutate(Number(id));
   }
 
-  function handleEditEtape(id: string) {
-    // In production: open inline edit mode for this step
-    console.log("Edit etape:", id);
+  function handleEditEtape() {
+    // Inline edit is not wired in this pass.
   }
 
   function handleReorder(from: number, to: number) {
-    setItem((prev) => {
-      const arr = [...prev.etapes];
-      const [moved] = arr.splice(from, 1);
-      arr.splice(to, 0, moved);
-      return { ...prev, etapes: arr };
-    });
+    const target = item.etapes[from];
+    if (!target || from === to) return;
+    reorderMut.mutate({ etapeId: Number(target.id), direction: to < from ? "up" : "down" });
   }
 
   function handleDeclarePiecesConfirm(pieces: PieceDeclared[]) {
     setShowDeclarePieces(false);
-    console.log("Pieces créées:", pieces);
-    // In production: create child Piece composants via API
+    declarePiecesMut.mutate({
+      parentId: composantId,
+      pieces: pieces.map((p) => ({
+        nom: p.nom,
+        reference: p.reference,
+        marque: p.marque,
+        modele: p.modele,
+        prix: p.prix ? Number(p.prix) : 0,
+        garantie: p.garantie ? Number(p.garantie) : 0,
+        qualite: QUALITE_LOCAL_TO_API[p.qualite],
+        materiau: p.materiau,
+        compatibilite: p.compatibilite,
+        categorieId: catId(item.categorie),
+      })),
+    });
+  }
+
+  if (isLoading) {
+    return (
+      <div style={{ padding: 64, textAlign: "center", color: T.steel, fontFamily: "Inter, system-ui, sans-serif" }}>
+        Chargement…
+      </div>
+    );
   }
 
   const tabs = [

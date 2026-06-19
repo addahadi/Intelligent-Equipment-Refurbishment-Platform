@@ -2,6 +2,16 @@
 // Inventory list with filter tabs and navigation
 
 import React, { useState, useMemo } from "react";
+import { useComposants } from "../../hooks/composants";
+import { useCategories } from "../../hooks/categories";
+
+// Map the API qualite enum onto this screen's local labels.
+const QUALITE_MAP: Record<string, "NEUF" | "BON" | "CORRECT" | "USAGE"> = {
+  COMME_NEUF: "NEUF",
+  TRES_BON: "BON",
+  BON: "BON",
+  CORRECT: "CORRECT",
+};
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -30,104 +40,6 @@ interface Composant {
 
 // ─── Mock data ────────────────────────────────────────────────────────────────
 
-const MOCK_COMPOSANTS: Composant[] = [
-  {
-    id: "comp-001",
-    nom: "Alternateur 24V 100A",
-    reference: "ALT-24V-100A-BSH",
-    marque: "Bosch",
-    modele: "0124655174",
-    categorie: "Électrique",
-    typeComposant: "PIECE",
-    qualite: "BON",
-    prix: 145,
-    etatActuel: "EN_VENTE",
-  },
-  {
-    id: "comp-002",
-    nom: "Compresseur d'air 50L",
-    reference: "COMP-50L-DPT",
-    marque: "Dupont",
-    modele: "CA-50-10",
-    categorie: "Pneumatique",
-    typeComposant: "ORGANE",
-    qualite: "CORRECT",
-    prix: 280,
-    etatActuel: "EN_RECONDITIONNEMENT",
-  },
-  {
-    id: "comp-003",
-    nom: "Moteur électrique 1.5kW",
-    reference: "MOT-1K5-SIE",
-    marque: "Siemens",
-    modele: "1LA7083-2AA10",
-    categorie: "Motorisation",
-    typeComposant: "ORGANE",
-    qualite: "BON",
-    prix: 190,
-    etatActuel: "EN_VENTE",
-  },
-  {
-    id: "comp-004",
-    nom: "Radiateur hydraulique 120×60",
-    reference: "RAD-HYD-120X60",
-    marque: "Thermia",
-    modele: "TH-HYD-120",
-    categorie: "Hydraulique",
-    typeComposant: "PIECE",
-    qualite: "USAGE",
-    prix: 95,
-    etatActuel: "EN_RECONDITIONNEMENT",
-  },
-  {
-    id: "comp-005",
-    nom: "Démarreur 12V",
-    reference: "DEM-12V-VAL",
-    marque: "Valeo",
-    modele: "TS14E4",
-    categorie: "Électrique",
-    typeComposant: "PIECE",
-    qualite: "USAGE",
-    prix: 0,
-    etatActuel: "RECYCLE",
-  },
-  {
-    id: "comp-006",
-    nom: "Pompe hydraulique à pistons",
-    reference: "PMP-HYD-BOH-A10",
-    marque: "Bosch Rexroth",
-    modele: "A10VSO28DFR",
-    categorie: "Hydraulique",
-    typeComposant: "ORGANE",
-    qualite: "BON",
-    prix: 420,
-    etatActuel: "VENDU",
-  },
-  {
-    id: "comp-007",
-    nom: "Variateur de fréquence 7.5kW",
-    reference: "VFD-7K5-SCH-ATV",
-    marque: "Schneider",
-    modele: "ATV320U75N4C",
-    categorie: "Électrique",
-    typeComposant: "ORGANE",
-    qualite: "NEUF",
-    prix: 680,
-    etatActuel: "EN_VENTE",
-  },
-  {
-    id: "comp-008",
-    nom: "Réducteur de vitesse 1:20",
-    reference: "RED-1-20-SEW",
-    marque: "SEW-Eurodrive",
-    modele: "R57DT100L4",
-    categorie: "Transmission",
-    typeComposant: "ORGANE",
-    qualite: "BON",
-    prix: 310,
-    etatActuel: "VENDU",
-  },
-];
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
 
@@ -270,11 +182,30 @@ export default function InventairePage() {
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [search, setSearch] = useState("");
 
+  const { data: apiComposants } = useComposants({});
+  const { data: categoriesData } = useCategories();
+
+  const composants: Composant[] = useMemo(() => {
+    const catById = new Map((categoriesData ?? []).map((c) => [c.id, c.libelle]));
+    return (apiComposants ?? []).map((c) => ({
+      id: String(c.id),
+      nom: c.nom,
+      reference: c.reference,
+      marque: c.marque,
+      modele: c.modele,
+      categorie: c.categorieId != null ? catById.get(c.categorieId) ?? "—" : "—",
+      typeComposant: c.typeComposant,
+      qualite: (c.qualite ? QUALITE_MAP[c.qualite] : "USAGE") ?? "USAGE",
+      prix: c.prix,
+      etatActuel: c.etatActuel,
+    }));
+  }, [apiComposants, categoriesData]);
+
   const filtered = useMemo(() => {
     let base =
       tab === "TOUS"
-        ? MOCK_COMPOSANTS
-        : MOCK_COMPOSANTS.filter((c) => c.etatActuel === tab);
+        ? composants
+        : composants.filter((c) => c.etatActuel === tab);
 
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -293,7 +224,7 @@ export default function InventairePage() {
       const cmp = av.localeCompare(bv, "fr");
       return sortDir === "asc" ? cmp : -cmp;
     });
-  }, [tab, sortKey, sortDir, search]);
+  }, [composants, tab, sortKey, sortDir, search]);
 
   function handleSort(key: keyof Composant) {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -316,13 +247,13 @@ export default function InventairePage() {
   }
 
   const counts: Record<TabFilter, number> = {
-    TOUS: MOCK_COMPOSANTS.length,
-    EN_RECONDITIONNEMENT: MOCK_COMPOSANTS.filter(
+    TOUS: composants.length,
+    EN_RECONDITIONNEMENT: composants.filter(
       (c) => c.etatActuel === "EN_RECONDITIONNEMENT"
     ).length,
-    EN_VENTE: MOCK_COMPOSANTS.filter((c) => c.etatActuel === "EN_VENTE").length,
-    VENDU: MOCK_COMPOSANTS.filter((c) => c.etatActuel === "VENDU").length,
-    RECYCLE: MOCK_COMPOSANTS.filter((c) => c.etatActuel === "RECYCLE").length,
+    EN_VENTE: composants.filter((c) => c.etatActuel === "EN_VENTE").length,
+    VENDU: composants.filter((c) => c.etatActuel === "VENDU").length,
+    RECYCLE: composants.filter((c) => c.etatActuel === "RECYCLE").length,
   };
 
   const tabs: { key: TabFilter; label: string }[] = [

@@ -1,6 +1,8 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useApp } from '../store/AppContext'
-import { listEtapes } from '../api/etapes'
+import {
+  listEtapes, createEtape, updateEtape, deleteEtape, reorderEtape, type EtapeInput,
+} from '../api/etapes'
 
 export function useEtapes(composantId: number) {
   const { lang } = useApp()
@@ -8,5 +10,48 @@ export function useEtapes(composantId: number) {
     queryKey: ['etapes', lang, composantId],
     queryFn: () => listEtapes(composantId),
     enabled: Number.isFinite(composantId) && composantId > 0,
+  })
+}
+
+// Étape mutations all affect the parent composant's timeline (and possibly its
+// etat via FR-33 side-effects), so they invalidate etapes + composant queries.
+function invalidateEtapes(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: ['etapes'] })
+  qc.invalidateQueries({ queryKey: ['composant'] })
+  qc.invalidateQueries({ queryKey: ['composants'] })
+}
+
+export function useCreateEtape() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ composantId, input }: { composantId: number; input: EtapeInput }) =>
+      createEtape(composantId, input),
+    onSuccess: () => invalidateEtapes(qc),
+  })
+}
+
+export function useUpdateEtape() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ etapeId, input }: { etapeId: number; input: EtapeInput }) =>
+      updateEtape(etapeId, input),
+    onSuccess: () => invalidateEtapes(qc),
+  })
+}
+
+export function useDeleteEtape() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (etapeId: number) => deleteEtape(etapeId),
+    onSuccess: () => invalidateEtapes(qc),
+  })
+}
+
+export function useReorderEtape() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ etapeId, direction }: { etapeId: number; direction: 'up' | 'down' }) =>
+      reorderEtape(etapeId, direction),
+    onSuccess: () => invalidateEtapes(qc),
   })
 }
