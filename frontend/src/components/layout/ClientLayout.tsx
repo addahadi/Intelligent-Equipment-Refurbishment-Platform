@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
-import { Home, Heart, ShoppingBag, User } from 'lucide-react';
+import { Home, Heart, ShoppingBag, User, PackagePlus } from 'lucide-react';
 import { useApp } from '../../store/AppContext';
 import { useFavorisIds } from '../../hooks/favoris';
 import { ToastContainer } from '../shared/Toast';
@@ -78,6 +78,21 @@ export default function ClientLayout() {
           aria-label="Navigation principale"
           style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
         >
+          {/* Entreprise CTA — visually distinct from client destinations */}
+          <ProposerCta />
+
+          {/* Divider between the entreprise CTA and client destinations */}
+          <span
+            aria-hidden="true"
+            style={{
+              width: '1px',
+              height: '20px',
+              backgroundColor: 'var(--rule)',
+              margin: '0 8px',
+              flexShrink: 0,
+            }}
+          />
+
           <NavDesktopLink to="/favoris" count={favoriCount}>
             <Heart size={15} strokeWidth={1.75} aria-hidden="true" />
             Favoris
@@ -94,46 +109,67 @@ export default function ClientLayout() {
       <main
         style={{
           flex: 1,
-          /* On mobile, leave room for the fixed bottom tab bar (56px + 1px border) */
           paddingBottom: 'env(safe-area-inset-bottom, 0px)',
         }}
-        className="pb-[57px] md:pb-0"
       >
-        <Outlet />
+        {/* Keyed by route so the entrance animation replays on each navigation. */}
+        <div key={location.pathname} className="page-enter">
+          <Outlet />
+        </div>
       </main>
 
-      {/* ── Desktop-only footer ───────────────────────────────────────── */}
+      {/* ── Footer (entreprise → /proposer) ───────────────────────────── */}
+      {/* Shown on every surface (spec §3.2). On mobile this is the primary  */}
+      {/* entry point since the desktop top-nav CTA is hidden; rendered as a  */}
+      {/* visible outlined button. Clear the 56px fixed bottom tab bar.       */}
       <footer
-        className="hidden md:flex"
+        className="flex footer-clear-tabbar"
         style={{
           borderTop: '1px solid var(--rule)',
-          padding: '14px 32px',
+          padding: '16px 32px',
+          flexDirection: 'column',
           justifyContent: 'center',
           alignItems: 'center',
+          gap: '8px',
           backgroundColor: 'var(--panel)',
         }}
       >
+        <span
+          style={{
+            fontSize: '13px',
+            fontFamily: "'IBM Plex Sans', sans-serif",
+            color: 'var(--steel)',
+          }}
+        >
+          Vous êtes une entreprise&nbsp;?
+        </span>
         <Link
           to="/proposer"
           style={{
-            fontSize: '12px',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            fontSize: '13px',
+            fontWeight: 600,
             fontFamily: "'IBM Plex Sans', sans-serif",
-            color: 'var(--steel)',
+            color: 'var(--verdigris)',
             textDecoration: 'none',
-            borderBottom: '1px solid var(--rule)',
-            paddingBottom: '1px',
-            transition: 'color 0.15s, border-color 0.15s',
+            border: '1px solid var(--verdigris)',
+            borderRadius: '4px',
+            padding: '8px 16px',
+            transition: 'color 0.15s, background-color 0.15s',
           }}
           onMouseEnter={e => {
-            (e.currentTarget as HTMLAnchorElement).style.color = 'var(--verdigris)';
-            (e.currentTarget as HTMLAnchorElement).style.borderBottomColor = 'var(--verdigris)';
+            (e.currentTarget as HTMLAnchorElement).style.backgroundColor = 'var(--verdigris)';
+            (e.currentTarget as HTMLAnchorElement).style.color = '#fff';
           }}
           onMouseLeave={e => {
-            (e.currentTarget as HTMLAnchorElement).style.color = 'var(--steel)';
-            (e.currentTarget as HTMLAnchorElement).style.borderBottomColor = 'var(--rule)';
+            (e.currentTarget as HTMLAnchorElement).style.backgroundColor = 'transparent';
+            (e.currentTarget as HTMLAnchorElement).style.color = 'var(--verdigris)';
           }}
         >
-          Vous êtes une entreprise&nbsp;? Proposez un équipement.
+          <PackagePlus size={15} strokeWidth={1.75} aria-hidden="true" />
+          Proposer un équipement
         </Link>
       </footer>
 
@@ -254,6 +290,51 @@ export default function ClientLayout() {
 
       <ToastContainer />
     </div>
+  );
+}
+
+// ─── ProposerCta (entreprise entry point, desktop top-nav) ─────────────────────
+
+function ProposerCta() {
+  const location = useLocation();
+  const isActive = location.pathname.startsWith('/proposer');
+
+  return (
+    <Link
+      to="/proposer"
+      aria-current={isActive ? 'page' : undefined}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '6px',
+        padding: '6px 12px',
+        fontSize: '13px',
+        fontFamily: "'IBM Plex Sans', sans-serif",
+        fontWeight: 600,
+        color: isActive ? '#fff' : 'var(--verdigris)',
+        textDecoration: 'none',
+        border: '1px solid var(--verdigris)',
+        borderRadius: '4px',
+        backgroundColor: isActive ? 'var(--verdigris)' : 'transparent',
+        transition: 'color 0.12s, background-color 0.12s',
+        whiteSpace: 'nowrap',
+      }}
+      onMouseEnter={e => {
+        if (!isActive) {
+          (e.currentTarget as HTMLAnchorElement).style.backgroundColor = 'var(--verdigris)';
+          (e.currentTarget as HTMLAnchorElement).style.color = '#fff';
+        }
+      }}
+      onMouseLeave={e => {
+        if (!isActive) {
+          (e.currentTarget as HTMLAnchorElement).style.backgroundColor = 'transparent';
+          (e.currentTarget as HTMLAnchorElement).style.color = 'var(--verdigris)';
+        }
+      }}
+    >
+      <PackagePlus size={15} strokeWidth={1.75} aria-hidden="true" />
+      Proposer un équipement
+    </Link>
   );
 }
 

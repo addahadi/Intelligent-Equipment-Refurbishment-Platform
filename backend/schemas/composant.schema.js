@@ -70,6 +70,7 @@ export const listComposantsSchema = {
   }),
 };
 
+
 export const composantIdSchema = { params: idParam, query: langQuery };
 
 // FR-32 — declare salvageable child pieces under a parent organe.

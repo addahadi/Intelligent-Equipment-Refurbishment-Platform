@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback, type ChangeEvent } from 'react';
 import { useSubmitOffre } from '../hooks/offres';
 import { useCategories } from '../hooks/categories';
+import { useUploadImages } from '../hooks/uploads';
 
 type TypeComposant = 'Organe' | 'Piece';
 type EtatDeclare = 'FONCTIONNEL' | 'PARTIELLEMENT_FONCTIONNEL' | 'DEFECTUEUX';
@@ -466,20 +467,28 @@ interface ImageUploadProps {
 
 function ImageUpload({ images, onChange }: ImageUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const uploadMut = useUploadImages();
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const handleFiles = (e: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
-    files.forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const result = ev.target?.result as string;
-        onChange([...images, result]);
-      };
-      reader.readAsDataURL(file);
-    });
-    // Reset input so same file can be re-selected
+    // Reset input so the same file can be re-selected after this run.
     if (inputRef.current) inputRef.current.value = '';
+    if (files.length === 0) return;
+
+    setUploadError(null);
+    // Upload to the backend (→ Cloudinary); store the returned URLs, not base64.
+    uploadMut.mutate(
+      { files, folder: 'offres' },
+      {
+        onSuccess: (urls) => onChange([...images, ...urls]),
+        onError: (err: unknown) =>
+          setUploadError((err as { message?: string })?.message ?? "Échec du téléversement des photos."),
+      },
+    );
   };
+
+  const uploading = uploadMut.isPending;
 
   const removeImage = (idx: number) => {
     onChange(images.filter((_, i) => i !== idx));
@@ -560,12 +569,14 @@ function ImageUpload({ images, onChange }: ImageUploadProps) {
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
+        disabled={uploading}
         style={{
           background: T.atelier,
           border: `1px dashed ${T.rule}`,
           borderRadius: 4,
           padding: '12px 16px',
-          cursor: 'pointer',
+          cursor: uploading ? 'wait' : 'pointer',
+          opacity: uploading ? 0.6 : 1,
           fontFamily: "'IBM Plex Sans', sans-serif",
           fontSize: 13,
           color: T.steel,
@@ -576,6 +587,7 @@ function ImageUpload({ images, onChange }: ImageUploadProps) {
           transition: 'border-color 0.12s, color 0.12s',
         }}
         onMouseEnter={(e) => {
+          if (uploading) return;
           e.currentTarget.style.borderColor = T.verdigris;
           e.currentTarget.style.color = T.verdigris;
         }}
@@ -585,8 +597,19 @@ function ImageUpload({ images, onChange }: ImageUploadProps) {
         }}
       >
         <span style={{ fontSize: 16, lineHeight: 1 }}>+</span>
-        Ajouter des photos
+        {uploading ? 'Téléversement…' : 'Ajouter des photos'}
       </button>
+      {uploadError && (
+        <span
+          style={{
+            fontFamily: "'IBM Plex Sans', sans-serif",
+            fontSize: 12,
+            color: '#B4441F',
+          }}
+        >
+          {uploadError}
+        </span>
+      )}
       <input
         ref={inputRef}
         type="file"

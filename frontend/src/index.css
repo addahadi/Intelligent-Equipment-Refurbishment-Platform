@@ -37,9 +37,71 @@ body {
   outline-offset: 2px;
 }
 
+/* Reserve space below the footer so the fixed mobile tab bar (56px + safe area)
+   doesn't overlap it. Reset at the md breakpoint, where the tab bar is hidden.
+   Plain CSS rather than a Tailwind arbitrary value: calc() wrapping env(...,0px)
+   is not reliably emitted by the JIT. */
+.footer-clear-tabbar {
+  margin-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+}
+@media (min-width: 768px) {
+  .footer-clear-tabbar {
+    margin-bottom: 0;
+  }
+}
+
+/* ── Motion ───────────────────────────────────────────────────────────────
+   All of the below is neutralised by the prefers-reduced-motion block. */
+
+/* Catalogue card entrance — staggered fade-up. Applied to a wrapper so it
+   never fights the card's own JS-driven hover transform. */
+@keyframes card-enter {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.card-enter {
+  animation: card-enter 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Route transition — keyed remount replays this on every navigation. */
+@keyframes page-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.page-enter {
+  animation: page-enter 0.3s ease-out both;
+}
+
+/* Favori heart pop. */
+@keyframes heart-pop {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.35); }
+  70%  { transform: scale(0.9); }
+  100% { transform: scale(1); }
+}
+.heart-pop {
+  animation: heart-pop 0.35s ease;
+}
+
+/* Skeleton shimmer sweep (replaces opacity pulse). */
+@keyframes skeleton-shimmer {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, var(--rule) 25%, var(--atelier) 37%, var(--rule) 63%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
+/* Press feedback on buttons platform-wide. */
+button { transition: transform 0.08s ease; }
+button:active:not(:disabled) { transform: scale(0.96); }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+  button:active:not(:disabled) { transform: none; }
 }

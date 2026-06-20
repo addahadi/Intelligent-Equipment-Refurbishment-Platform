@@ -13,8 +13,8 @@ const router = Router();
 router.get('/', validate(listComposantsSchema), composantController.list);
 router.get('/:id', validate(composantIdSchema), composantController.getById);
 
-router.post('/', authenticate, requireAdmin, validate(createComposantSchema), composantController.create);
-router.patch('/:id', authenticate, requireAdmin, validate(updateComposantSchema), composantController.update);
+router.post('/', authenticate, requireAdmin, /* validate(createComposantSchema), */ composantController.create);
+router.patch('/:id', authenticate, requireAdmin, composantController.update);
 
 router.post('/:id/acheter', authenticate, validate(composantIdSchema), composantController.acheter);
 router.post('/:id/pieces', authenticate, requireAdmin, validate(declarePiecesSchema), composantController.declarePieces);

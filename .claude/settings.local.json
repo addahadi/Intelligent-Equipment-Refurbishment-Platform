@@ -16,7 +16,30 @@
       "Bash(cp __CMDSUB_OUTPUT__/diagrams/sequence_offre_reconditionnement.png C:/Users/hecin/AppData/Local/Temp/claude/D--Start-up-de-reconditionnement-intelligent-d--quipement/f0475a50-2976-40b9-a1d7-9aa3bd914e86/scratchpad/sequence_offre_reconditionnement.png)",
       "Bash(cd /d/Start-up*/frontend)",
       "Bash(npm install *)",
-      "Skill(artifact-design)"
+      "Skill(artifact-design)",
+      "Bash(npx tsc *)",
+      "Bash(npm run *)",
+      "Bash(node --check services/offre.service.js)",
+      "Bash(node --check services/commande.service.js)",
+      "Bash(node --check services/mappers/offre.mapper.js)",
+      "Bash(node --check services/mappers/commande.mapper.js)",
+      "Bash(node seed.js)",
+      "Bash(node *)",
+      "Bash(grep -vE '^\\\\s*#|^\\\\s*$')",
+      "Bash(node server.js)",
+      "Bash(echo \"started pid $!\")",
+      "Bash(curl -s -m 10 http://localhost:3000/api/health)",
+      "Read(//tmp/**)",
+      "PowerShell(Get-NetTCPConnection *)",
+      "Bash(base64 -d)",
+      "Bash(curl -s -m 30 -X POST http://localhost:3000/api/uploads -F 'files=@test.png;type=image/png' -F folder=offres)",
+      "Bash(curl -s -m 10 \"http://localhost:3000/api/categories\")",
+      "Bash(python -c ' *)",
+      "Bash(curl -s -m 30 -o /tmp/resp.txt -w 'HTTP %{http_code}\\\\n' -X POST http://localhost:3000/api/offres -H 'Content-Type: application/json' --data-binary @big.json)",
+      "Bash(curl -s -m 10 -o /dev/null -w \"root HTTP %{http_code}\\\\n\" http://localhost:5173/)",
+      "Bash(curl -s -m 10 -o /dev/null -w \"/proposer HTTP %{http_code}\\\\n\" http://localhost:5173/proposer)",
+      "Bash(curl -s -m 10 -o /dev/null -w 'GET offres with Origin: %{http_code}\\\\n' -H 'Origin: http://localhost:5173' http://localhost:3000/api/categories)",
+      "Bash(curl -s -m 10 -D - -o /dev/null -X OPTIONS http://localhost:3000/api/uploads -H 'Origin: http://localhost:5175' -H 'Access-Control-Request-Method: POST')"
     ]
   }
 }

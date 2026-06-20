@@ -119,7 +119,10 @@ export default function EquipmentCard({
           if (!favoriLocal) (e.currentTarget as HTMLButtonElement).style.color = 'var(--steel)';
         }}
       >
-        <Heart size={16} fill={favoriLocal ? '#9C4A2C' : 'none'} strokeWidth={2} />
+        {/* Keyed by state so the pop animation replays each time it's favori'd. */}
+        <span key={String(favoriLocal)} className={favoriLocal ? 'heart-pop' : undefined} style={{ display: 'flex' }}>
+          <Heart size={16} fill={favoriLocal ? '#9C4A2C' : 'none'} strokeWidth={2} />
+        </span>
       </button>
 
       {/* Image Zone */}
@@ -128,7 +131,7 @@ export default function EquipmentCard({
           aspectRatio: '4/3',
           backgroundColor: 'var(--atelier)',
           borderBottom: '1px solid var(--rule)',
-          padding: '16px',
+          overflow: 'hidden',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -139,7 +142,7 @@ export default function EquipmentCard({
           <img
             src={imageSrc}
             alt={composant.nom}
-            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
             loading="lazy"
           />
         ) : (

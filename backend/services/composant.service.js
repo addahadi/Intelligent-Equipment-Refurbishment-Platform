@@ -13,7 +13,13 @@ function buildColumns(body, { partial }) {
   };
   const has = (key) => Object.prototype.hasOwnProperty.call(body, key);
   const maybe = (key, col, val) => {
-    if (!partial || has(key)) set(col, val);
+    // PATCH: only touch columns whose key was actually provided.
+    if (partial && !has(key)) return;
+    // INSERT: skip absent fields so NOT NULL columns with a default
+    // (etat_actuel, garantie, images) fall back to that default instead of
+    // an explicit NULL — which would otherwise trip a 23502 not-null check.
+    if (val === undefined) return;
+    set(col, val);
   };
 
   maybe('typeComposant', 'type_composant', body.typeComposant);
@@ -36,15 +42,37 @@ function buildColumns(body, { partial }) {
 
   // STI: write only the branch matching the (effective) type.
   const type = body.typeComposant;
-  if (type === 'ORGANE' || (partial && (has('typeEquipement') || has('typeEquipementAr')))) {
+  // On a PATCH that doesn't change the type, fall back to whichever branch's
+  // fields were supplied so partial edits still touch the right columns.
+  const writeOrgane = type === 'ORGANE'
+    || (partial && type === undefined && (has('typeEquipement') || has('typeEquipementAr')));
+  const writePiece = type === 'PIECE'
+    || (partial && type === undefined
+        && (has('materiau') || has('materiauAr') || has('compatibilite') || has('compatibiliteAr')));
+
+  if (writeOrgane) {
     maybe('typeEquipement', 'type_equipement_fr', body.typeEquipement);
     maybe('typeEquipementAr', 'type_equipement_ar', body.typeEquipementAr);
   }
-  if (type === 'PIECE' || (partial && (has('materiau') || has('compatibilite')))) {
+  if (writePiece) {
     maybe('materiau', 'materiau_fr', body.materiau);
     maybe('materiauAr', 'materiau_ar', body.materiauAr);
     maybe('compatibilite', 'compatibilite_fr', body.compatibilite);
     maybe('compatibiliteAr', 'compatibilite_ar', body.compatibiliteAr);
+  }
+
+  // When the type is set explicitly (creation or an ORGANE⇄PIECE conversion),
+  // null out the opposite branch's columns so chk_organe_fields /
+  // chk_piece_fields always hold — otherwise stale columns from the old type
+  // collide with the new type and trigger a 23514 check violation.
+  if (type === 'ORGANE') {
+    set('materiau_fr', null);
+    set('materiau_ar', null);
+    set('compatibilite_fr', null);
+    set('compatibilite_ar', null);
+  } else if (type === 'PIECE') {
+    set('type_equipement_fr', null);
+    set('type_equipement_ar', null);
   }
 
   return cols;
@@ -82,12 +110,27 @@ export async function getById(id, lang) {
   const [row] = await sql`select * from composant where id = ${id}`;
   if (!row) throw AppError.notFound('Composant introuvable.');
   return toComposant(row, lang);
+
+  
 }
 
 export async function create(body, lang) {
   const cols = buildColumns(body, { partial: false });
-  const [row] = await sql`insert into composant ${sql(cols)} returning *`;
-  return toComposant(row, lang);
+  console.log('── INSERT COLS ──', JSON.stringify(cols));
+  try {
+    const [row] = await sql`insert into composant ${sql(cols)} returning *`;
+    return toComposant(row, lang);
+  } catch (err) {
+    console.error('══ DB INSERT FAILED ══');
+    console.error('code:', err.code);
+    console.error('message:', err.message);
+    console.error('detail:', err.detail);
+    console.error('constraint:', err.constraint_name);
+    console.error('column:', err.column_name);
+    console.error('table:', err.table_name);
+    console.error('══════════════════════');
+    throw err;
+  }
 }
 
 export async function update(id, body, lang) {

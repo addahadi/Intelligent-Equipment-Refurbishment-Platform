@@ -4,10 +4,23 @@ import AppError from '../utils/AppError.js';
 // Postgres error codes into the { error: { code, message, details? } } envelope.
 // eslint-disable-next-line no-unused-vars
 export default function errorHandler(err, _req, res, _next) {
+  // ── DEBUG: log every error so we can see the real cause ──
+  console.error('── ERROR HANDLER ──');
+  console.error('PG code:', err.code, '| message:', err.message);
+  console.error('detail:', err.detail, '| constraint:', err.constraint_name, '| column:', err.column_name);
+  console.error('───────────────────');
+
   // Already a structured application error.
   if (err instanceof AppError) {
     return res.status(err.status).json({
       error: { code: err.code, message: err.message, details: err.details },
+    });
+  }
+
+  // Body too large (express.json / urlencoded limit exceeded).
+  if (err.type === 'entity.too.large' || err.status === 413) {
+    return res.status(413).json({
+      error: { code: 'PAYLOAD_TOO_LARGE', message: 'Données envoyées trop volumineuses (photos trop lourdes ?).' },
     });
   }
 
@@ -34,8 +47,9 @@ export default function errorHandler(err, _req, res, _next) {
       });
     case '23502': // not_null_violation
     case '23514': // check_violation
+      console.error('Constraint violation:', err.message, err.detail, err.constraint, err.column);
       return res.status(400).json({
-        error: { code: 'VALIDATION_ERROR', message: 'Contrainte de données non respectée.' },
+        error: { code: 'VALIDATION_ERROR', message: 'Contrainte de données non respectée.', details: err.message },
       });
     default:
       break;

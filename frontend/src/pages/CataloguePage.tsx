@@ -263,16 +263,16 @@ function SkeletonCard() {
       }}
     >
       <div
-        className="animate-pulse"
-        style={{ aspectRatio: '4/3', backgroundColor: 'var(--rule)' }}
+        className="skeleton"
+        style={{ aspectRatio: '4/3' }}
       />
       <div style={{ padding: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        <div className="animate-pulse" style={{ height: '14px', width: '60%', backgroundColor: 'var(--rule)', borderRadius: '3px' }} />
-        <div className="animate-pulse" style={{ height: '12px', width: '80%', backgroundColor: 'var(--rule)', borderRadius: '3px' }} />
-        <div className="animate-pulse" style={{ height: '10px', width: '45%', backgroundColor: 'var(--rule)', borderRadius: '3px' }} />
+        <div className="skeleton" style={{ height: '14px', width: '60%', borderRadius: '3px' }} />
+        <div className="skeleton" style={{ height: '12px', width: '80%', borderRadius: '3px' }} />
+        <div className="skeleton" style={{ height: '10px', width: '45%', borderRadius: '3px' }} />
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px' }}>
-          <div className="animate-pulse" style={{ height: '20px', width: '30%', backgroundColor: 'var(--rule)', borderRadius: '3px' }} />
-          <div className="animate-pulse" style={{ height: '18px', width: '18px', borderRadius: '50%', backgroundColor: 'var(--rule)' }} />
+          <div className="skeleton" style={{ height: '20px', width: '30%', borderRadius: '3px' }} />
+          <div className="skeleton" style={{ height: '18px', width: '18px', borderRadius: '50%' }} />
         </div>
       </div>
     </div>
@@ -675,15 +675,23 @@ export default function CataloguePage() {
               }}
               className="md:grid-cols-3"
             >
-              {filtered.map(composant => (
-                <EquipmentCard
+              {filtered.map((composant, i) => (
+                <div
                   key={composant.id}
-                  composant={composant}
-                  categorie={categories.find(c => c.id === composant.categorieId)}
-                  isFavori={favorisIds.has(composant.id)}
-                  onToggleFavori={() => handleToggleFavori(composant.id)}
-                  onClick={() => navigate(`/equipement/${composant.id}`)}
-                />
+                  className="card-enter"
+                  /* display:grid stretches the card to fill the row height
+                     (keeps equal-height cards). Cap the stagger so late cards
+                     don't lag far behind. */
+                  style={{ display: 'grid', animationDelay: `${Math.min(i, 12) * 40}ms` }}
+                >
+                  <EquipmentCard
+                    composant={composant}
+                    categorie={categories.find(c => c.id === composant.categorieId)}
+                    isFavori={favorisIds.has(composant.id)}
+                    onToggleFavori={() => handleToggleFavori(composant.id)}
+                    onClick={() => navigate(`/equipement/${composant.id}`)}
+                  />
+                </div>
               ))}
             </div>
           )}

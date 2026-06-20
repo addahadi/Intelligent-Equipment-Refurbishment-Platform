@@ -3,9 +3,10 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useParams } from "react-router-dom";
-import { useComposant, useUpdateComposant, useDeclarePieces } from "../../hooks/composants";
+import { useComposant, useUpdateComposant, useCreateComposant, useDeclarePieces } from "../../hooks/composants";
 import { useEtapes, useCreateEtape, useDeleteEtape, useReorderEtape } from "../../hooks/etapes";
 import { useCategories } from "../../hooks/categories";
+import { useUploadImages } from "../../hooks/uploads";
 import type { TypeEtape as ApiTypeEtape } from "../../types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -61,6 +62,7 @@ interface ComposantData {
   materiau: string;
   compatibilite: string;
   etatActuel: EtatActuel;
+  images: string[];
   etapes: Etape[];
   parentOrgane?: { id: string; nom: string; reference: string } | null;
 }
@@ -84,6 +86,7 @@ const MOCK_ITEM: ComposantData = {
   materiau: "",
   compatibilite: "",
   etatActuel: "EN_RECONDITIONNEMENT",
+  images: [],
   etapes: [
     {
       id: "et-1",
@@ -100,6 +103,28 @@ const MOCK_ITEM: ComposantData = {
       verdict: "REPARABLE",
     },
   ],
+  parentOrgane: null,
+};
+
+// Blank template used when creating a new item (route id === "new").
+const BLANK_ITEM: ComposantData = {
+  id: "",
+  nom: "",
+  reference: "",
+  marque: "",
+  modele: "",
+  categorie: "",
+  typeComposant: "ORGANE",
+  qualite: "BON",
+  prix: "",
+  garantie: "",
+  description: "",
+  typeEquipement: "",
+  materiau: "",
+  compatibilite: "",
+  etatActuel: "EN_RECONDITIONNEMENT",
+  images: [],
+  etapes: [],
   parentOrgane: null,
 };
 
@@ -1539,15 +1564,156 @@ function StepPanel({
   );
 }
 
+// ─── ImageUpload ──────────────────────────────────────────────────────────────
+
+interface ImageUploadProps {
+  images: string[];
+  onChange: (images: string[]) => void;
+}
+
+function ImageUpload({ images, onChange }: ImageUploadProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const uploadMut = useUploadImages();
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const handleFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    // Reset input so the same file can be re-selected after this run.
+    if (inputRef.current) inputRef.current.value = "";
+    if (files.length === 0) return;
+
+    setUploadError(null);
+    // Upload to the backend (→ Cloudinary); store the returned URLs.
+    uploadMut.mutate(
+      { files, folder: "composants" },
+      {
+        onSuccess: (urls) => onChange([...images, ...urls]),
+        onError: (err: unknown) =>
+          setUploadError((err as { message?: string })?.message ?? "Échec du téléversement des photos."),
+      },
+    );
+  };
+
+  const uploading = uploadMut.isPending;
+  const removeImage = (idx: number) => onChange(images.filter((_, i) => i !== idx));
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <FieldLabel>Photos</FieldLabel>
+
+      {images.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {images.map((src, i) => (
+            <div
+              key={`${src}-${i}`}
+              style={{
+                position: "relative",
+                width: 84,
+                height: 84,
+                borderRadius: 4,
+                overflow: "hidden",
+                border: `1px solid ${T.rule}`,
+                background: T.atelier,
+                flexShrink: 0,
+              }}
+            >
+              <img
+                src={src}
+                alt={`Photo ${i + 1}`}
+                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              />
+              <button
+                type="button"
+                onClick={() => removeImage(i)}
+                aria-label={`Supprimer la photo ${i + 1}`}
+                style={{
+                  position: "absolute",
+                  top: 3,
+                  right: 3,
+                  background: "rgba(24,33,31,0.7)",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: "50%",
+                  width: 18,
+                  height: 18,
+                  fontSize: 11,
+                  lineHeight: 1,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: 0,
+                }}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        disabled={uploading}
+        style={{
+          background: T.atelier,
+          border: `1px dashed ${T.rule}`,
+          borderRadius: 4,
+          padding: "12px 16px",
+          cursor: uploading ? "wait" : "pointer",
+          opacity: uploading ? 0.6 : 1,
+          fontFamily: "Inter, system-ui, sans-serif",
+          fontSize: 13,
+          color: T.steel,
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          width: "100%",
+        }}
+        onMouseEnter={(e) => {
+          if (uploading) return;
+          e.currentTarget.style.borderColor = T.verdigris;
+          e.currentTarget.style.color = T.verdigris;
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.borderColor = T.rule;
+          e.currentTarget.style.color = T.steel;
+        }}
+      >
+        <span style={{ fontSize: 16, lineHeight: 1 }}>+</span>
+        {uploading ? "Téléversement…" : "Ajouter des photos"}
+      </button>
+
+      {uploadError && (
+        <span style={{ fontFamily: "Inter, system-ui, sans-serif", fontSize: 12, color: T.oxide }}>
+          {uploadError}
+        </span>
+      )}
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        onChange={handleFiles}
+        style={{ display: "none" }}
+        aria-hidden="true"
+      />
+    </div>
+  );
+}
+
 // ─── AttributsTab ─────────────────────────────────────────────────────────────
 
 interface AttributsTabProps {
   item: ComposantData;
   onUpdate: (updates: Partial<ComposantData>) => void;
   onSave: () => void;
+  error?: string | null;
 }
 
-function AttributsTab({ item, onUpdate, onSave }: AttributsTabProps) {
+function AttributsTab({ item, onUpdate, onSave, error }: AttributsTabProps) {
   return (
     <div style={{ padding: "24px 32px", maxWidth: 720 }}>
       <div
@@ -1748,6 +1914,27 @@ function AttributsTab({ item, onUpdate, onSave }: AttributsTabProps) {
         />
       </div>
 
+      {/* Photos */}
+      <div style={{ marginBottom: 24 }}>
+        <ImageUpload
+          images={item.images}
+          onChange={(imgs) => onUpdate({ images: imgs })}
+        />
+      </div>
+
+      {error && (
+        <div
+          style={{
+            fontFamily: "Inter, system-ui, sans-serif",
+            fontSize: 12,
+            color: T.oxide,
+            marginBottom: 12,
+          }}
+        >
+          {error}
+        </div>
+      )}
+
       <button
         onClick={onSave}
         style={{
@@ -1794,22 +1981,27 @@ function etapeLocalToApi(t: TypeEtape): ApiTypeEtape {
 
 export default function ItemEditorPage() {
   const { id } = useParams<{ id: string }>();
+  const isNew = id === "new";
   const composantId = Number(id);
+  const isValidId = Number.isFinite(composantId) && composantId > 0;
+  const isNotFound = !isNew && !isValidId; // e.g. /admin/inventaire/abc or /0
 
   const { data: composant, isLoading } = useComposant(composantId);
   const { data: etapesData } = useEtapes(composantId);
   const { data: categoriesData } = useCategories();
   const updateMut = useUpdateComposant();
+  const createMut = useCreateComposant();
   const createEtapeMut = useCreateEtape();
   const deleteEtapeMut = useDeleteEtape();
   const reorderMut = useReorderEtape();
   const declarePiecesMut = useDeclarePieces();
 
-  const [item, setItem] = useState<ComposantData>(MOCK_ITEM);
+  const [item, setItem] = useState<ComposantData>(isNew ? BLANK_ITEM : MOCK_ITEM);
   const [activeTab, setActiveTab] = useState<"attributs" | "tracabilite">(
     "attributs"
   );
   const [saved, setSaved] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [showDeclarePieces, setShowDeclarePieces] = useState(false);
 
   const categories = categoriesData ?? [];
@@ -1821,12 +2013,17 @@ export default function ItemEditorPage() {
   // Load editable attribute fields once; re-sync server-derived state thereafter.
   const loadedRef = useRef(false);
   useEffect(() => {
-    if (!composant) return;
+    if (isNew || !composant) return;
+    // After the first load, only re-sync server-derived state. The ref flip must
+    // live OUTSIDE the updater: StrictMode invokes updaters twice in dev, and a
+    // ref mutation inside would make the 2nd call take the wrong branch and keep
+    // the initial MOCK_ITEM (an ORGANE) instead of the fetched item.
+    if (loadedRef.current) {
+      setItem((prev) => ({ ...prev, etatActuel: composant.etatActuel }));
+      return;
+    }
+    loadedRef.current = true;
     setItem((prev) => {
-      if (loadedRef.current) {
-        return { ...prev, etatActuel: composant.etatActuel };
-      }
-      loadedRef.current = true;
       return {
         id: String(composant.id),
         nom: composant.nom,
@@ -1843,6 +2040,7 @@ export default function ItemEditorPage() {
         materiau: (composant as { materiau?: string }).materiau ?? "",
         compatibilite: (composant as { compatibilite?: string }).compatibilite ?? "",
         etatActuel: composant.etatActuel,
+        images: composant.images ?? [],
         etapes: prev.etapes,
         parentOrgane: null,
       };
@@ -1852,7 +2050,7 @@ export default function ItemEditorPage() {
 
   // Étapes are persisted immediately, so always mirror the server timeline.
   useEffect(() => {
-    if (!etapesData) return;
+    if (isNew || !etapesData) return;
     setItem((prev) => ({
       ...prev,
       etapes: etapesData.map((e) => ({
@@ -1862,7 +2060,7 @@ export default function ItemEditorPage() {
         description: e.description,
       })),
     }));
-  }, [etapesData]);
+  }, [etapesData, isNew]);
 
   const hasRecyclage =
     item.typeComposant === "ORGANE" &&
@@ -1874,29 +2072,55 @@ export default function ItemEditorPage() {
   }
 
   function handleSave() {
+    const baseInput = {
+      typeComposant: item.typeComposant,
+      nom: item.nom,
+      reference: item.reference,
+      marque: item.marque,
+      modele: item.modele,
+      categorieId: catId(item.categorie),
+      qualite: QUALITE_LOCAL_TO_API[item.qualite],
+      garantie: item.garantie ? Number(item.garantie) : undefined,
+      images: item.images,
+      description: item.description,
+      typeEquipement: item.typeComposant === "ORGANE" ? item.typeEquipement : undefined,
+      materiau: item.typeComposant === "PIECE" ? item.materiau : undefined,
+      compatibilite: item.typeComposant === "PIECE" ? item.compatibilite : undefined,
+    };
+
+    if (isNew) {
+      // Backend requires nom, reference and a valid prix on creation.
+      const prixNum = Number(item.prix);
+      if (!item.nom.trim() || !item.reference.trim() || item.prix === "" || Number.isNaN(prixNum) || prixNum < 0) {
+        setFormError("Nom, référence et prix sont obligatoires.");
+        return;
+      }
+      setFormError(null);
+      createMut.mutate(
+        { ...baseInput, prix: prixNum },
+        {
+          onSuccess: (created) => {
+            window.location.href = `/admin/inventaire/${created.id}`;
+          },
+          onError: (e: unknown) =>
+            setFormError((e as { message?: string })?.message ?? "Échec de l'enregistrement."),
+        },
+      );
+      return;
+    }
+
     updateMut.mutate(
       {
         id: composantId,
-        input: {
-          nom: item.nom,
-          reference: item.reference,
-          marque: item.marque,
-          modele: item.modele,
-          categorieId: catId(item.categorie),
-          qualite: QUALITE_LOCAL_TO_API[item.qualite],
-          prix: item.prix ? Number(item.prix) : undefined,
-          garantie: item.garantie ? Number(item.garantie) : undefined,
-          description: item.description,
-          typeEquipement: item.typeComposant === "ORGANE" ? item.typeEquipement : undefined,
-          materiau: item.typeComposant === "PIECE" ? item.materiau : undefined,
-          compatibilite: item.typeComposant === "PIECE" ? item.compatibilite : undefined,
-        },
+        input: { ...baseInput, prix: item.prix ? Number(item.prix) : undefined },
       },
       {
         onSuccess: () => {
           setSaved(true);
           setTimeout(() => setSaved(false), 2500);
         },
+        onError: (e: unknown) =>
+          setFormError((e as { message?: string })?.message ?? "Échec de l'enregistrement."),
       },
     );
   }
@@ -1943,18 +2167,47 @@ export default function ItemEditorPage() {
     });
   }
 
-  if (isLoading) {
-    return (
+  const centered = (children: React.ReactNode) => (
+    <DesktopGate>
       <div style={{ padding: 64, textAlign: "center", color: T.steel, fontFamily: "Inter, system-ui, sans-serif" }}>
-        Chargement…
+        {children}
       </div>
-    );
-  }
+    </DesktopGate>
+  );
 
-  const tabs = [
-    { key: "attributs" as const, label: "Attributs" },
-    { key: "tracabilite" as const, label: "Traçabilité" },
-  ];
+  const notFound = centered(
+    <div>
+      <div style={{ marginBottom: 16 }}>Article introuvable.</div>
+      <button
+        className="back-btn"
+        onClick={() => (window.location.href = "/admin/inventaire")}
+        style={{
+          fontFamily: "Inter, system-ui, sans-serif",
+          fontSize: 13,
+          fontWeight: 600,
+          background: T.verdigris,
+          color: "#fff",
+          border: "none",
+          padding: "8px 20px",
+          borderRadius: 4,
+          cursor: "pointer",
+        }}
+      >
+        ← Retour à l'inventaire
+      </button>
+    </div>
+  );
+
+  if (isNotFound) return notFound;
+  if (!isNew && isLoading) return centered("Chargement…");
+  if (!isNew && !composant) return notFound;
+
+  const tabs = isNew
+    ? [{ key: "attributs" as const, label: "Attributs" }]
+    : [
+        { key: "attributs" as const, label: "Attributs" },
+        { key: "tracabilite" as const, label: "Traçabilité" },
+      ];
 
   return (
     <DesktopGate>
@@ -2095,9 +2348,9 @@ export default function ItemEditorPage() {
           </button>
           <div className="editor-header-top">
             <div>
-              <div className="editor-nom">{item.nom}</div>
+              <div className="editor-nom">{item.nom || (isNew ? "Nouvel article" : "")}</div>
               <div className="editor-meta">
-                <ReferencePlate reference={item.reference} />
+                {item.reference && <ReferencePlate reference={item.reference} />}
                 <StateBadge etat={item.etatActuel} />
                 <ConsequenceBanner etat={item.etatActuel} />
               </div>
@@ -2118,7 +2371,23 @@ export default function ItemEditorPage() {
 
         {/* Tab content */}
         {activeTab === "attributs" ? (
-          <AttributsTab item={item} onUpdate={handleUpdate} onSave={handleSave} />
+          <AttributsTab item={item} onUpdate={handleUpdate} onSave={handleSave} error={formError} />
+        ) : isNew ? (
+          <div style={{ padding: "24px 32px", maxWidth: 720 }}>
+            <div
+              style={{
+                padding: "24px",
+                textAlign: "center",
+                fontFamily: "Inter, system-ui, sans-serif",
+                fontSize: 13,
+                color: T.steel,
+                border: `1px dashed ${T.rule}`,
+                borderRadius: 4,
+              }}
+            >
+              Enregistrez d'abord l'article pour suivre sa traçabilité.
+            </div>
+          </div>
         ) : (
           <div className="trace-layout">
             {/* Left: timeline */}

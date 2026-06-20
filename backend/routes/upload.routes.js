@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import multer from 'multer';
-import authenticate from '../middleware/authenticate.js';
 import AppError from '../utils/AppError.js';
 import * as uploadController from '../controllers/upload.controller.js';
 
@@ -15,6 +14,9 @@ const upload = multer({
 
 const router = Router();
 
-router.post('/', authenticate, upload.array('files', 5), uploadController.upload);
+// Public: the offer-submission form (FR-17) is anonymous, so image upload must
+// be reachable without a token. Abuse is bounded by multer (images only,
+// 5 MB x 5 files).
+router.post('/', upload.array('files', 5), uploadController.upload);
 
 export default router;

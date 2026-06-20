@@ -569,9 +569,11 @@ export default function OffresPage() {
     accepterMut.mutate(Number(id), {
       onSuccess: (composant) => {
         setToast({ message: `Offre acceptée — composant créé.`, type: "success" });
-        setTimeout(() => {
-          window.location.href = `/admin/inventaire/${composant.id}`;
-        }, 1200);
+        if (composant?.id != null) {
+          setTimeout(() => {
+            window.location.href = `/admin/inventaire/${composant.id}`;
+          }, 1200);
+        }
       },
       onError: (e: unknown) =>
         setToast({ message: (e as { message?: string })?.message ?? "Échec.", type: "error" }),
