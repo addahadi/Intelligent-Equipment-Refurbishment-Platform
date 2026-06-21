@@ -1,7 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useApp } from '../store/AppContext'
 import {
-  listEtapes, createEtape, updateEtape, deleteEtape, reorderEtape, type EtapeInput,
+  listEtapes, createEtape, updateEtape, deleteEtape, reorderEtape,
+  type EtapeInput, type OverrideInput,
 } from '../api/etapes'
 
 export function useEtapes(composantId: number) {
@@ -42,7 +43,8 @@ export function useUpdateEtape() {
 export function useDeleteEtape() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (etapeId: number) => deleteEtape(etapeId),
+    mutationFn: ({ etapeId, ...opts }: { etapeId: number } & OverrideInput) =>
+      deleteEtape(etapeId, opts),
     onSuccess: () => invalidateEtapes(qc),
   })
 }
@@ -50,8 +52,9 @@ export function useDeleteEtape() {
 export function useReorderEtape() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ etapeId, direction }: { etapeId: number; direction: 'up' | 'down' }) =>
-      reorderEtape(etapeId, direction),
+    mutationFn: ({ etapeId, direction, ...opts }:
+      { etapeId: number; direction: 'up' | 'down' } & OverrideInput) =>
+      reorderEtape(etapeId, direction, opts),
     onSuccess: () => invalidateEtapes(qc),
   })
 }

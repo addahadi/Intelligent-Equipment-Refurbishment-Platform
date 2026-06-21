@@ -8,7 +8,7 @@
 ###  below, so the protected calls just work.
 ### =====================================================================
 
-@baseUrl = http://localhost:3099/api
+@baseUrl = http://localhost:3000/api
 @lang = fr
 
 ### ---------------------------------------------------------------------
@@ -233,6 +233,110 @@ Content-Type: application/json
 ### Delete a step (admin)
 DELETE {{baseUrl}}/etapes/1
 Authorization: Bearer {{adminToken}}
+
+
+### =====================================================================
+### SOLD-ITEM FREEZE  (edit a VENDU composant — locked unless overridden)
+###   Setup: pick a composant that is EN_VENTE, buy it as a client
+###   (POST /composants/:id/acheter) so its etat_actuel becomes VENDU,
+###   then run the calls below against that same id. Replace 1 / 99 as needed.
+### =====================================================================
+
+### A) Edit a SOLD composant WITHOUT override → 409 COMPOSANT_VENDU
+PATCH {{baseUrl}}/composants/1?lang={{lang}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "description": "tentative de modification sans override"
+}
+
+### B) Edit a SOLD composant WITH override but NO motif → 400 (motif requis)
+PATCH {{baseUrl}}/composants/1?lang={{lang}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "description": "override sans motif",
+  "override": true
+}
+
+### C) Edit a SOLD composant WITH override + motif → 200, audited
+PATCH {{baseUrl}}/composants/1?lang={{lang}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "description": "Correction: garantie corrigée après vente",
+  "override": true,
+  "motif": "Erreur de saisie sur la description, corrigée à la demande du client"
+}
+
+### D) Add a step to a SOLD composant WITHOUT override → 409 COMPOSANT_VENDU
+POST {{baseUrl}}/composants/1/etapes?lang={{lang}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "type": "TEST",
+  "description": "essai sur article vendu"
+}
+
+### E) Add a step to a SOLD composant WITH override + motif → 201, audited
+POST {{baseUrl}}/composants/1/etapes?lang={{lang}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "type": "TEST",
+  "description": "Re-test après réclamation client",
+  "override": true,
+  "motif": "Re-test demandé par le client après livraison"
+}
+
+### F) Update a step of a SOLD composant WITHOUT override → 409 COMPOSANT_VENDU
+PATCH {{baseUrl}}/etapes/99?lang={{lang}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "description": "modif étape sans override"
+}
+
+### G) Delete a step of a SOLD composant WITHOUT override → 409 COMPOSANT_VENDU
+DELETE {{baseUrl}}/etapes/99
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{}
+
+### H) Delete a step of a SOLD composant WITH override + motif → 204, audited
+DELETE {{baseUrl}}/etapes/99
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "override": true,
+  "motif": "Étape ajoutée par erreur, retirée"
+}
+
+### I) Reorder steps of a SOLD composant WITHOUT override → 409 COMPOSANT_VENDU
+POST {{baseUrl}}/etapes/99/reorder?lang={{lang}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "direction": "up"
+}
+
+### Sanity: editing an UNSOLD (EN_VENTE) composant still works, no override needed
+PATCH {{baseUrl}}/composants/2?lang={{lang}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "description": "édition normale d'un article non vendu"
+}
 
 
 ### =====================================================================

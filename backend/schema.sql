@@ -219,6 +219,23 @@ create table public.commande (
 );
 
 -- ---------------------------------------------------------------------
+-- 3.8b  JOURNAL_MODIFICATION — audit trail for overridden edits on SOLD items
+--   A composant is frozen once etat_actuel = 'VENDU'. An admin may still apply
+--   a deliberate correction (override + motif); each such edit appends one row
+--   here capturing who / when / what operation / why / before & after values.
+--   Append-only, internal accountability only — never shown to clients.
+-- ---------------------------------------------------------------------
+create table public.journal_modification (
+  id            bigint generated always as identity primary key,
+  composant_id  bigint not null references public.composant (id) on delete cascade,
+  profil_id     bigint not null references public.profil (id)    on delete restrict,
+  date          timestamptz not null default now(),
+  operation     text not null,   -- COMPOSANT_UPDATE | ETAPE_CREATE | ETAPE_UPDATE | ETAPE_DELETE | ETAPE_REORDER
+  motif         text not null,
+  details       jsonb not null   -- { "before": {...}, "after": {...} }
+);
+
+-- ---------------------------------------------------------------------
 -- 3.8  FAVORI  (FR-10) — many-to-many Client <-> Composant
 -- ---------------------------------------------------------------------
 create table public.favori (
@@ -257,6 +274,7 @@ create index idx_offre_entreprise   on public.offre (entreprise_id);
 create index idx_offre_statut       on public.offre (statut);
 create index idx_etape_composant    on public.etape_tracabilite (composant_id);
 create index idx_commande_client    on public.commande (client_id);
+create index idx_journal_composant  on public.journal_modification (composant_id);
 
 -- =====================================================================
 -- 5. updated_at TRIGGERS  (one per table)

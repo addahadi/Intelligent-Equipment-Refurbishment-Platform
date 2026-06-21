@@ -21,8 +21,10 @@ export default class AppError extends Error {
     return new AppError('NOT_FOUND', 404, message);
   }
 
-  static conflict(message = 'Conflit de ressource.') {
-    return new AppError('CONFLICT', 409, message);
+  // `code` lets callers raise a distinct conflict (e.g. COMPOSANT_VENDU) the
+  // frontend can branch on, while defaulting to the generic CONFLICT.
+  static conflict(message = 'Conflit de ressource.', code = 'CONFLICT') {
+    return new AppError(code, 409, message);
   }
 
   static badRequest(message = 'Requête invalide.', details) {

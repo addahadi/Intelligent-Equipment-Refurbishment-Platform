@@ -18,7 +18,11 @@ export const create = asyncHandler(async (req, res) => {
 });
 
 export const update = asyncHandler(async (req, res) => {
-  const item = await composantService.update(req.params.id, req.body, resolveLang(req));
+  const { override, motif } = req.body;
+  const item = await composantService.update(
+    req.params.id, req.body, resolveLang(req),
+    { override, motif, profilId: req.user.id },
+  );
   res.json(item);
 });
 

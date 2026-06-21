@@ -25,3 +25,11 @@ export const langQuery = z.object({
 export const url = z.string().url();
 export const images = z.array(url).max(20).optional().default([]);
 export const price = z.number().nonnegative();
+
+// Audited-override fields for editing a SOLD composant. The service enforces
+// that motif is non-empty when an override actually applies; here they are just
+// accepted so validation doesn't strip them from the body.
+export const overrideFields = {
+  override: z.boolean().optional(),
+  motif: z.string().trim().max(1000).optional(),
+};

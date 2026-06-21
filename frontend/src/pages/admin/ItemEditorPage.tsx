@@ -1711,9 +1711,10 @@ interface AttributsTabProps {
   onUpdate: (updates: Partial<ComposantData>) => void;
   onSave: () => void;
   error?: string | null;
+  readOnly?: boolean;
 }
 
-function AttributsTab({ item, onUpdate, onSave, error }: AttributsTabProps) {
+function AttributsTab({ item, onUpdate, onSave, error, readOnly = false }: AttributsTabProps) {
   return (
     <div style={{ padding: "24px 32px", maxWidth: 720 }}>
       <div
@@ -1722,6 +1723,9 @@ function AttributsTab({ item, onUpdate, onSave, error }: AttributsTabProps) {
           gridTemplateColumns: "1fr 1fr",
           gap: "16px 24px",
           marginBottom: 20,
+          // Frozen sold item: visibly inert until the admin enters correction mode.
+          pointerEvents: readOnly ? "none" : "auto",
+          opacity: readOnly ? 0.55 : 1,
         }}
       >
         <div>
@@ -1890,7 +1894,7 @@ function AttributsTab({ item, onUpdate, onSave, error }: AttributsTabProps) {
       </div>
 
       {/* Description */}
-      <div style={{ marginBottom: 24 }}>
+      <div style={{ marginBottom: 24, pointerEvents: readOnly ? "none" : "auto", opacity: readOnly ? 0.55 : 1 }}>
         <FieldLabel>Description</FieldLabel>
         <textarea
           value={item.description}
@@ -1915,7 +1919,7 @@ function AttributsTab({ item, onUpdate, onSave, error }: AttributsTabProps) {
       </div>
 
       {/* Photos */}
-      <div style={{ marginBottom: 24 }}>
+      <div style={{ marginBottom: 24, pointerEvents: readOnly ? "none" : "auto", opacity: readOnly ? 0.55 : 1 }}>
         <ImageUpload
           images={item.images}
           onChange={(imgs) => onUpdate({ images: imgs })}
@@ -1937,24 +1941,27 @@ function AttributsTab({ item, onUpdate, onSave, error }: AttributsTabProps) {
 
       <button
         onClick={onSave}
+        disabled={readOnly}
+        title={readOnly ? "Article vendu — entrez en mode correction pour modifier." : undefined}
         style={{
           fontFamily: "Inter, system-ui, sans-serif",
           fontSize: 13,
           fontWeight: 600,
-          background: T.verdigris,
+          background: readOnly ? T.steel : T.verdigris,
           color: "#fff",
           border: "none",
           padding: "10px 28px",
           borderRadius: 4,
-          cursor: "pointer",
+          cursor: readOnly ? "not-allowed" : "pointer",
+          opacity: readOnly ? 0.6 : 1,
           transition: "opacity 0.15s",
         }}
-        onMouseEnter={(e) =>
-          ((e.currentTarget as HTMLButtonElement).style.opacity = "0.88")
-        }
-        onMouseLeave={(e) =>
-          ((e.currentTarget as HTMLButtonElement).style.opacity = "1")
-        }
+        onMouseEnter={(e) => {
+          if (!readOnly) (e.currentTarget as HTMLButtonElement).style.opacity = "0.88";
+        }}
+        onMouseLeave={(e) => {
+          if (!readOnly) (e.currentTarget as HTMLButtonElement).style.opacity = "1";
+        }}
       >
         Enregistrer
       </button>
@@ -1977,6 +1984,172 @@ function etapeApiToLocal(t: ApiTypeEtape): TypeEtape {
 }
 function etapeLocalToApi(t: TypeEtape): ApiTypeEtape {
   return t === "AUTRE" ? "TEST" : (t as ApiTypeEtape);
+}
+
+// ─── Sold-item freeze: lock banner + correction-reason dialog ───────────────
+
+function SoldLockBanner({
+  unlocked,
+  motif,
+  onEnter,
+  onExit,
+}: {
+  unlocked: boolean;
+  motif: string | null;
+  onEnter: () => void;
+  onExit: () => void;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        padding: "10px 14px",
+        margin: "0 40px 14px",
+        borderRadius: 4,
+        border: `1px solid ${unlocked ? T.oxide : T.rule}`,
+        background: unlocked ? `${T.oxide}10` : `${T.steel}10`,
+        fontFamily: "Inter, system-ui, sans-serif",
+      }}
+    >
+      <span style={{ fontSize: 16 }}>{unlocked ? "✎" : "🔒"}</span>
+      <div style={{ flex: 1, fontSize: 12.5, color: T.graphite, lineHeight: 1.4 }}>
+        {unlocked ? (
+          <>
+            <strong>Mode correction actif.</strong> Chaque modification de cet article
+            vendu est enregistrée dans le journal d'audit.
+            {motif && (
+              <div style={{ color: T.steel, marginTop: 2 }}>Motif : « {motif} »</div>
+            )}
+          </>
+        ) : (
+          <>
+            <strong>Article vendu — traçabilité verrouillée.</strong> Un client possède
+            cet article. Pour corriger une erreur, passez en mode correction (un motif
+            est requis et l'action est auditée).
+          </>
+        )}
+      </div>
+      <button
+        onClick={unlocked ? onExit : onEnter}
+        style={{
+          fontFamily: "Inter, system-ui, sans-serif",
+          fontSize: 12,
+          fontWeight: 600,
+          background: unlocked ? "none" : T.oxide,
+          color: unlocked ? T.steel : "#fff",
+          border: unlocked ? `1px solid ${T.rule}` : "none",
+          padding: "7px 16px",
+          borderRadius: 4,
+          cursor: "pointer",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {unlocked ? "Terminer la correction" : "Apporter une correction"}
+      </button>
+    </div>
+  );
+}
+
+function MotifDialog({
+  onConfirm,
+  onClose,
+}: {
+  onConfirm: (motif: string) => void;
+  onClose: () => void;
+}) {
+  const [motif, setMotif] = useState("");
+  const trimmed = motif.trim();
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.4)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 10000,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: T.panel,
+          borderRadius: 6,
+          padding: 24,
+          width: 440,
+          maxWidth: "90vw",
+          fontFamily: "Inter, system-ui, sans-serif",
+          boxShadow: "0 8px 30px rgba(0,0,0,0.25)",
+        }}
+      >
+        <div style={{ fontSize: 15, fontWeight: 600, color: T.graphite, marginBottom: 6 }}>
+          Corriger un article vendu
+        </div>
+        <div style={{ fontSize: 12.5, color: T.steel, lineHeight: 1.45, marginBottom: 14 }}>
+          Cet article appartient à un client. Indiquez le motif de la correction — il
+          sera consigné dans le journal d'audit avec votre identité.
+        </div>
+        <textarea
+          autoFocus
+          value={motif}
+          onChange={(e) => setMotif(e.target.value)}
+          rows={3}
+          placeholder="ex. Erreur de saisie sur la garantie, corrigée à la demande du client"
+          style={{
+            width: "100%",
+            fontFamily: "Inter, system-ui, sans-serif",
+            fontSize: 13,
+            border: `1px solid ${T.rule}`,
+            background: T.atelier,
+            color: T.graphite,
+            padding: "8px 10px",
+            borderRadius: 4,
+            outline: "none",
+            resize: "vertical",
+            marginBottom: 16,
+          }}
+        />
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+          <button
+            onClick={onClose}
+            style={{
+              fontSize: 12.5,
+              fontWeight: 500,
+              color: T.steel,
+              background: "none",
+              border: `1px solid ${T.rule}`,
+              padding: "8px 16px",
+              borderRadius: 4,
+              cursor: "pointer",
+            }}
+          >
+            Annuler
+          </button>
+          <button
+            onClick={() => trimmed && onConfirm(trimmed)}
+            disabled={!trimmed}
+            style={{
+              fontSize: 12.5,
+              fontWeight: 600,
+              color: "#fff",
+              background: trimmed ? T.oxide : T.steel,
+              border: "none",
+              padding: "8px 18px",
+              borderRadius: 4,
+              cursor: trimmed ? "pointer" : "not-allowed",
+              opacity: trimmed ? 1 : 0.6,
+            }}
+          >
+            Activer le mode correction
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function ItemEditorPage() {
@@ -2003,6 +2176,20 @@ export default function ItemEditorPage() {
   const [saved, setSaved] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [showDeclarePieces, setShowDeclarePieces] = useState(false);
+
+  // ── Sold-item freeze ──────────────────────────────────────────────────────
+  // A VENDU composant is locked. Entering "correction mode" captures a motif
+  // that is attached (override + motif) to every edit until the admin exits, so
+  // each change lands in the backend audit log.
+  const isSold = item.etatActuel === "VENDU";
+  const [correctionMotif, setCorrectionMotif] = useState<string | null>(null);
+  const [showMotifDialog, setShowMotifDialog] = useState(false);
+  const locked = isSold && !correctionMotif;
+  const overrideArgs = () =>
+    isSold && correctionMotif ? { override: true, motif: correctionMotif } : {};
+  // Safety net: if an edit is rejected because the item is (now) sold, drop into
+  // correction mode by prompting for a motif instead of showing a raw error.
+  const isSoldConflict = (e: unknown) => (e as { code?: string })?.code === "COMPOSANT_VENDU";
 
   const categories = categoriesData ?? [];
   const catLibelle = (cid?: number | null) =>
@@ -2112,30 +2299,47 @@ export default function ItemEditorPage() {
     updateMut.mutate(
       {
         id: composantId,
-        input: { ...baseInput, prix: item.prix ? Number(item.prix) : undefined },
+        input: { ...baseInput, prix: item.prix ? Number(item.prix) : undefined, ...overrideArgs() },
       },
       {
         onSuccess: () => {
           setSaved(true);
+          setFormError(null);
           setTimeout(() => setSaved(false), 2500);
         },
-        onError: (e: unknown) =>
-          setFormError((e as { message?: string })?.message ?? "Échec de l'enregistrement."),
+        onError: (e: unknown) => {
+          if (isSoldConflict(e)) {
+            setShowMotifDialog(true);
+            return;
+          }
+          setFormError((e as { message?: string })?.message ?? "Échec de l'enregistrement.");
+        },
       },
     );
   }
 
+  // A locked (sold, not yet in correction mode) item prompts for a motif instead
+  // of mutating — so the timeline actions can't silently no-op.
+  function onSoldEdit(e: unknown) {
+    if (isSoldConflict(e)) setShowMotifDialog(true);
+  }
+
   function handleAddEtape(etape: Omit<Etape, "id">) {
+    if (locked) { setShowMotifDialog(true); return; }
     // BR-08: a DIAGNOSTIC verdict is carried in the description text.
     const description = etape.verdict ? `[${etape.verdict}] ${etape.description}` : etape.description;
-    createEtapeMut.mutate({
-      composantId,
-      input: { type: etapeLocalToApi(etape.type), date: etape.date, description },
-    });
+    createEtapeMut.mutate(
+      {
+        composantId,
+        input: { type: etapeLocalToApi(etape.type), date: etape.date, description, ...overrideArgs() },
+      },
+      { onError: onSoldEdit },
+    );
   }
 
   function handleDeleteEtape(id: string) {
-    deleteEtapeMut.mutate(Number(id));
+    if (locked) { setShowMotifDialog(true); return; }
+    deleteEtapeMut.mutate({ etapeId: Number(id), ...overrideArgs() }, { onError: onSoldEdit });
   }
 
   function handleEditEtape() {
@@ -2145,7 +2349,11 @@ export default function ItemEditorPage() {
   function handleReorder(from: number, to: number) {
     const target = item.etapes[from];
     if (!target || from === to) return;
-    reorderMut.mutate({ etapeId: Number(target.id), direction: to < from ? "up" : "down" });
+    if (locked) { setShowMotifDialog(true); return; }
+    reorderMut.mutate(
+      { etapeId: Number(target.id), direction: to < from ? "up" : "down", ...overrideArgs() },
+      { onError: onSoldEdit },
+    );
   }
 
   function handleDeclarePiecesConfirm(pieces: PieceDeclared[]) {
@@ -2369,9 +2577,21 @@ export default function ItemEditorPage() {
           </div>
         </div>
 
+        {/* Sold-item freeze banner */}
+        {!isNew && isSold && (
+          <div style={{ paddingTop: 14 }}>
+            <SoldLockBanner
+              unlocked={!locked}
+              motif={correctionMotif}
+              onEnter={() => setShowMotifDialog(true)}
+              onExit={() => setCorrectionMotif(null)}
+            />
+          </div>
+        )}
+
         {/* Tab content */}
         {activeTab === "attributs" ? (
-          <AttributsTab item={item} onUpdate={handleUpdate} onSave={handleSave} error={formError} />
+          <AttributsTab item={item} onUpdate={handleUpdate} onSave={handleSave} error={formError} readOnly={locked} />
         ) : isNew ? (
           <div style={{ padding: "24px 32px", maxWidth: 720 }}>
             <div
@@ -2391,7 +2611,10 @@ export default function ItemEditorPage() {
         ) : (
           <div className="trace-layout">
             {/* Left: timeline */}
-            <div className="trace-left">
+            <div
+              className="trace-left"
+              style={{ pointerEvents: locked ? "none" : "auto", opacity: locked ? 0.55 : 1 }}
+            >
               <div className="section-title">Historique</div>
               <TraceabilityTimeline
                 etapes={item.etapes}
@@ -2403,7 +2626,10 @@ export default function ItemEditorPage() {
             </div>
 
             {/* Right: step panel */}
-            <div className="trace-right">
+            <div
+              className="trace-right"
+              style={{ pointerEvents: locked ? "none" : "auto", opacity: locked ? 0.55 : 1 }}
+            >
               <StepPanel
                 etapes={item.etapes}
                 typeComposant={item.typeComposant}
@@ -2419,6 +2645,17 @@ export default function ItemEditorPage() {
       {/* Save toast */}
       {saved && (
         <div className="save-toast">Modifications enregistrées.</div>
+      )}
+
+      {/* Correction-reason dialog (sold item) */}
+      {showMotifDialog && (
+        <MotifDialog
+          onConfirm={(motif) => {
+            setCorrectionMotif(motif);
+            setShowMotifDialog(false);
+          }}
+          onClose={() => setShowMotifDialog(false)}
+        />
       )}
 
       {/* DeclarePieces dialog */}

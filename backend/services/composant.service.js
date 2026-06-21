@@ -2,6 +2,7 @@ import sql from '../config/database.js';
 import AppError from '../utils/AppError.js';
 import { toComposant } from './mappers/composant.mapper.js';
 import { toCommande } from './mappers/commande.mapper.js';
+import { lockComposant, writeAudit } from './sold-guard.js';
 
 // Map a validated payload to DB columns. Only type-appropriate STI columns are
 // written so the chk_organe_fields / chk_piece_fields constraints never fire.
@@ -133,12 +134,29 @@ export async function create(body, lang) {
   }
 }
 
-export async function update(id, body, lang) {
+// `ctx` = { override, motif, profilId }. A VENDU composant is frozen unless
+// ctx.override is set (+ a motif), in which case the edit is audited.
+export async function update(id, body, lang, ctx = {}) {
   const cols = buildColumns(body, { partial: true });
   if (Object.keys(cols).length === 0) return getById(id, lang);
-  const [row] = await sql`update composant set ${sql(cols)} where id = ${id} returning *`;
-  if (!row) throw AppError.notFound('Composant introuvable.');
-  return toComposant(row, lang);
+
+  return sql.begin(async (tx) => {
+    const { row: before, sold } = await lockComposant(tx, id, ctx);
+
+    const [row] = await tx`update composant set ${tx(cols)} where id = ${id} returning *`;
+
+    if (sold) {
+      await writeAudit(tx, {
+        composantId: id,
+        profilId: ctx.profilId,
+        operation: 'COMPOSANT_UPDATE',
+        motif: ctx.motif,
+        before,
+        after: row,
+      });
+    }
+    return toComposant(row, lang);
+  });
 }
 
 // FR-13/14 — purchase through the stored function (row lock + state flip).

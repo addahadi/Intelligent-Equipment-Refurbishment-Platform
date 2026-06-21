@@ -26,6 +26,9 @@ export interface ComposantInput {
   materiauAr?: string
   compatibilite?: string
   compatibiliteAr?: string
+  // Audited-override fields — required only when editing a SOLD composant.
+  override?: boolean
+  motif?: string
 }
 
 export interface ComposantFilters {
