@@ -1,13 +1,20 @@
 // FILE 4: ItemEditorPage.tsx
 // Item editor + traceability builder with two tabs
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { useComposant, useUpdateComposant, useCreateComposant, useDeclarePieces } from "../../hooks/composants";
 import { useEtapes, useCreateEtape, useDeleteEtape, useReorderEtape } from "../../hooks/etapes";
 import { useCategories } from "../../hooks/categories";
 import { useUploadImages } from "../../hooks/uploads";
 import type { TypeEtape as ApiTypeEtape } from "../../types";
+import {
+  getTimelineWarnings,
+  severityForEtape,
+  messagesForEtape,
+  type TimelineWarning,
+  type WarningSeverity,
+} from "../../lib/timelineWarnings";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -171,6 +178,19 @@ const QUALITE_OPTIONS: { value: Qualite; label: string }[] = [
   { value: "CORRECT", label: "Correct" },
   { value: "USAGE", label: "Usagé" },
 ];
+
+// Soft-warning severity → colour. High reuses the destructive oxide, medium the
+// brass caution tone, low the muted steel — same vocabulary as the rest of the UI.
+const WARNING_COLORS: Record<WarningSeverity, string> = {
+  high: T.oxide,
+  medium: T.brass,
+  low: T.steel,
+};
+const WARNING_SEVERITY_LABEL: Record<WarningSeverity, string> = {
+  high: "Incohérence",
+  medium: "À vérifier",
+  low: "Remarque",
+};
 
 // ─── DesktopGate ──────────────────────────────────────────────────────────────
 
@@ -363,6 +383,7 @@ interface TimelineProps {
   onDelete: (id: string) => void;
   onReorder: (from: number, to: number) => void;
   parentOrgane?: { id: string; nom: string; reference: string } | null;
+  warnings: TimelineWarning[];
 }
 
 function TraceabilityTimeline({
@@ -370,6 +391,7 @@ function TraceabilityTimeline({
   onEdit,
   onDelete,
   parentOrgane,
+  warnings,
 }: TimelineProps) {
   return (
     <div>
@@ -539,6 +561,24 @@ function TraceabilityTimeline({
                       {etape.verdict === "REPARABLE" ? "Réparable" : "Endommagé"}
                     </span>
                   )}
+                  {(() => {
+                    const sev = severityForEtape(Number(etape.id), warnings);
+                    if (!sev) return null;
+                    return (
+                      <span
+                        title={messagesForEtape(Number(etape.id), warnings).join("\n")}
+                        style={{
+                          fontSize: 11,
+                          lineHeight: 1,
+                          color: WARNING_COLORS[sev],
+                          cursor: "help",
+                        }}
+                        aria-label={`Avertissement : ${WARNING_SEVERITY_LABEL[sev]}`}
+                      >
+                        ⚠
+                      </span>
+                    );
+                  })()}
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                   <span
@@ -1080,6 +1120,83 @@ function DeclarePiecesDialog({
             </button>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── TimelineWarningsPanel ──────────────────────────────────────────────────
+// Passive coherence advisor: lists soft warnings, highest severity first. It
+// never blocks anything — the admin reads it and decides whether to act.
+
+const SEVERITY_ORDER: WarningSeverity[] = ["high", "medium", "low"];
+
+function TimelineWarningsPanel({ warnings }: { warnings: TimelineWarning[] }) {
+  if (warnings.length === 0) return null;
+
+  const sorted = [...warnings].sort(
+    (a, b) => SEVERITY_ORDER.indexOf(a.severity) - SEVERITY_ORDER.indexOf(b.severity),
+  );
+
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <div
+        style={{
+          fontFamily: "Inter, system-ui, sans-serif",
+          fontSize: 10,
+          fontWeight: 600,
+          letterSpacing: "0.07em",
+          textTransform: "uppercase",
+          color: T.steel,
+          marginBottom: 12,
+        }}
+      >
+        Cohérence de la traçabilité
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {sorted.map((w, i) => {
+          const color = WARNING_COLORS[w.severity];
+          return (
+            <div
+              key={`${w.code}-${i}`}
+              style={{
+                display: "flex",
+                gap: 9,
+                padding: "9px 11px",
+                background: `${color}10`,
+                border: `1px solid ${color}40`,
+                borderRadius: 4,
+              }}
+            >
+              <span style={{ fontSize: 12, lineHeight: 1.3, color, flexShrink: 0 }}>⚠</span>
+              <div>
+                <div
+                  style={{
+                    fontFamily: "'IBM Plex Mono', monospace",
+                    fontSize: 9,
+                    fontWeight: 600,
+                    letterSpacing: "0.06em",
+                    textTransform: "uppercase",
+                    color,
+                    marginBottom: 2,
+                  }}
+                >
+                  {WARNING_SEVERITY_LABEL[w.severity]}
+                </div>
+                <div
+                  style={{
+                    fontFamily: "Inter, system-ui, sans-serif",
+                    fontSize: 12,
+                    color: T.graphite,
+                    lineHeight: 1.45,
+                  }}
+                >
+                  {w.message}
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -2253,6 +2370,13 @@ export default function ItemEditorPage() {
     item.typeComposant === "ORGANE" &&
     item.etapes.some((e) => e.type === "RECYCLAGE");
 
+  // Soft coherence warnings, derived from the RAW API étapes (backend enum
+  // intact — not the lossy local copy). Purely advisory; never gates an edit.
+  const timelineWarnings = useMemo(
+    () => getTimelineWarnings(etapesData ?? [], item.typeComposant),
+    [etapesData, item.typeComposant],
+  );
+
   function handleUpdate(updates: Partial<ComposantData>) {
     setItem((prev) => ({ ...prev, ...updates }));
     setSaved(false);
@@ -2622,6 +2746,7 @@ export default function ItemEditorPage() {
                 onDelete={handleDeleteEtape}
                 onReorder={handleReorder}
                 parentOrgane={item.parentOrgane}
+                warnings={timelineWarnings}
               />
             </div>
 
@@ -2630,6 +2755,7 @@ export default function ItemEditorPage() {
               className="trace-right"
               style={{ pointerEvents: locked ? "none" : "auto", opacity: locked ? 0.55 : 1 }}
             >
+              <TimelineWarningsPanel warnings={timelineWarnings} />
               <StepPanel
                 etapes={item.etapes}
                 typeComposant={item.typeComposant}

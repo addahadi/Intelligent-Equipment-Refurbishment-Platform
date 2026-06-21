@@ -39,7 +39,17 @@
       "Bash(curl -s -m 10 -o /dev/null -w \"root HTTP %{http_code}\\\\n\" http://localhost:5173/)",
       "Bash(curl -s -m 10 -o /dev/null -w \"/proposer HTTP %{http_code}\\\\n\" http://localhost:5173/proposer)",
       "Bash(curl -s -m 10 -o /dev/null -w 'GET offres with Origin: %{http_code}\\\\n' -H 'Origin: http://localhost:5173' http://localhost:3000/api/categories)",
-      "Bash(curl -s -m 10 -D - -o /dev/null -X OPTIONS http://localhost:3000/api/uploads -H 'Origin: http://localhost:5175' -H 'Access-Control-Request-Method: POST')"
+      "Bash(curl -s -m 10 -D - -o /dev/null -X OPTIONS http://localhost:3000/api/uploads -H 'Origin: http://localhost:5175' -H 'Access-Control-Request-Method: POST')",
+      "Read(//d/d/Start-up/**)",
+      "Read(//d/d/Start-up/backend/**)",
+      "Bash(netstat -ano)",
+      "Read(//c/Program Files/Google/Chrome/Application/**)",
+      "Read(//c/Program Files \\(x86\\)/Microsoft/Edge/Application/**)",
+      "Read(//c/Users/hecin/AppData/Local/**)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(npm test *)"
     ]
   }
 }
