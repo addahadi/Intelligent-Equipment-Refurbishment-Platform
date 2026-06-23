@@ -182,31 +182,31 @@ export const mockOffres: Offre[] = [
   {
     id: 1, designation: 'Lot pompe hydraulique usagée', typePropose: 'ORGANE', marque: 'Bosch Rexroth',
     modele: 'A10VSO', reference: 'OFR-001', categorieId: 1, etatDeclare: 'PARTIELLEMENT_FONCTIONNEL',
-    prixPropose: 200, description: 'Fuite constatée côté distributeur.', images: [IMG],
+    prixPropose: 200, quantite: 3, description: 'Fuite constatée côté distributeur.', images: [IMG],
     dateOffre: '2026-06-16', statut: 'EN_ATTENTE', entrepriseId: 1,
   },
   {
     id: 2, designation: 'Capteur de niveau radar', typePropose: 'PIECE', marque: 'Vega',
     modele: 'VEGAPULS', reference: 'OFR-002', categorieId: 4, etatDeclare: 'FONCTIONNEL',
-    prixPropose: 90, description: 'Déposé lors d’une rénovation, fonctionnel.', images: [IMG],
+    prixPropose: 90, quantite: 1, description: 'Déposé lors d’une rénovation, fonctionnel.', images: [IMG],
     dateOffre: '2026-06-17', statut: 'EN_ATTENTE', entrepriseId: 2,
   },
   {
     id: 3, designation: 'Moteur pas à pas', typePropose: 'PIECE', marque: 'Siemens',
     modele: 'ST-340', reference: 'OFR-003', categorieId: 2, etatDeclare: 'PARTIELLEMENT_FONCTIONNEL',
-    prixPropose: 40, description: 'Bruit anormal au démarrage.', images: [IMG],
+    prixPropose: 40, quantite: 5, quantiteAcceptee: 5, description: 'Bruit anormal au démarrage.', images: [IMG],
     dateOffre: '2026-06-02', statut: 'ACCEPTEE', entrepriseId: 3, composantId: 8,
   },
   {
     id: 4, designation: 'Vérin pneumatique grippé', typePropose: 'PIECE', marque: 'SMC',
     modele: 'CDQ2', reference: 'OFR-004', categorieId: 5, etatDeclare: 'DEFECTUEUX',
-    prixPropose: 25, description: 'Tige rayée, joint HS.', images: [IMG],
+    prixPropose: 25, quantite: 2, description: 'Tige rayée, joint HS.', images: [IMG],
     dateOffre: '2026-05-28', statut: 'REJETEE', entrepriseId: 1,
   },
   {
     id: 5, designation: 'Variateur ABB 11 kW', typePropose: 'ORGANE', marque: 'ABB',
     modele: 'ACS580', reference: 'OFR-005', categorieId: 3, etatDeclare: 'FONCTIONNEL',
-    prixPropose: 300, description: 'Remplacé pour montée en puissance.', images: [IMG],
+    prixPropose: 300, quantite: 1, description: 'Remplacé pour montée en puissance.', images: [IMG],
     dateOffre: '2026-06-18', statut: 'EN_ATTENTE', entrepriseId: 2,
   },
 ]

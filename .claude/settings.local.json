@@ -49,7 +49,19 @@
       "Bash(git add *)",
       "Bash(git commit *)",
       "Bash(git push *)",
-      "Bash(npm test *)"
+      "Bash(npm test *)",
+      "Bash(xargs grep -liE 'submitOffre|prixPropose|SubmitOffre|inventaire')",
+      "Bash(echo \"backend started, pid $!\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/api/categories)",
+      "Bash(echo \"frontend pid $!\")",
+      "Bash(git checkout *)",
+      "Bash(git --no-pager log --oneline -1)",
+      "Bash(git --no-pager log -1 --format='%B')",
+      "Bash(git --no-pager log -1 --format='%s%n---%n%b')",
+      "Bash(gh pr *)",
+      "PowerShell($g = Get-Command gh -ErrorAction SilentlyContinue; if \\($g\\) { \"gh: $\\($g.Source\\)\" } else { \"gh NOT FOUND\" })",
+      "Bash(curl -s -A 'SahAnalytics-Seed/1.0 \\(youcef.missoum@sahanalytics.com\\)' 'https://commons.wikimedia.org/w/api.php?action=query&format=json&generator=search&gsrnamespace=6&gsrlimit=3&gsrsearch=electric%20motor%20industrial&prop=imageinfo&iiprop=url|mime|size&iiurlwidth=900')",
+      "PowerShell(cd D:\\\\Start-up\\\\frontend; npx tsc -b 2>&1 | ForEach-Object { \\($_ -split '\\\\\\('\\)[0] } | Sort-Object -Unique)"
     ]
   }
 }

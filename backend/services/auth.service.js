@@ -54,3 +54,4 @@ export async function getMe(userId) {
   const lists = row.role === 'CLIENT' ? await clientLists(row.id) : {};
   return toProfil(row, lists);
 }
+

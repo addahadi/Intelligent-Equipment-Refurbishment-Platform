@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { useComposant, useUpdateComposant, useCreateComposant, useDeclarePieces } from "../../hooks/composants";
-import { useEtapes, useCreateEtape, useDeleteEtape, useReorderEtape } from "../../hooks/etapes";
+import { useEtapes, useCreateEtape, useUpdateEtape, useDeleteEtape, useReorderEtape } from "../../hooks/etapes";
 import { useCategories } from "../../hooks/categories";
 import { useUploadImages } from "../../hooks/uploads";
 import type { TypeEtape as ApiTypeEtape } from "../../types";
@@ -22,14 +22,14 @@ type EtatActuel = "EN_RECONDITIONNEMENT" | "EN_VENTE" | "VENDU" | "RECYCLE";
 type TypeComposant = "ORGANE" | "PIECE";
 type Qualite = "NEUF" | "BON" | "CORRECT" | "USAGE";
 type TypeEtape =
+  | "DECOMPOSITION"
   | "DIAGNOSTIC"
   | "NETTOYAGE"
   | "REPARATION"
   | "COMPOSITION"
   | "TEST"
   | "MISE_EN_VENTE"
-  | "RECYCLAGE"
-  | "AUTRE";
+  | "RECYCLAGE";
 type VerdictDiagnostic = "REPARABLE" | "ENDOMMAGE" | null;
 
 interface Etape {
@@ -151,6 +151,7 @@ const T = {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const ETAPE_LABELS: Record<TypeEtape, string> = {
+  DECOMPOSITION: "Décomposition",
   DIAGNOSTIC: "Diagnostic",
   NETTOYAGE: "Nettoyage",
   REPARATION: "Réparation",
@@ -158,10 +159,10 @@ const ETAPE_LABELS: Record<TypeEtape, string> = {
   TEST: "Test",
   MISE_EN_VENTE: "Mise en vente",
   RECYCLAGE: "Recyclage",
-  AUTRE: "Autre",
 };
 
 const ETAPE_COLORS: Record<TypeEtape, string> = {
+  DECOMPOSITION: T.steel,
   DIAGNOSTIC: T.verdigris,
   NETTOYAGE: "#4a8fa0",
   REPARATION: T.brass,
@@ -169,7 +170,6 @@ const ETAPE_COLORS: Record<TypeEtape, string> = {
   TEST: "#3a9e7c",
   MISE_EN_VENTE: T.verdigris,
   RECYCLAGE: T.oxide,
-  AUTRE: T.steel,
 };
 
 const QUALITE_OPTIONS: { value: Qualite; label: string }[] = [
@@ -1227,7 +1227,7 @@ function StepPanel({
   const [customDesc, setCustomDesc] = useState("");
   const [verdict, setVerdict] = useState<VerdictDiagnostic>(null);
   const [showCustomForm, setShowCustomForm] = useState(false);
-  const [customType, setCustomType] = useState<TypeEtape>("AUTRE");
+  const [customType, setCustomType] = useState<TypeEtape>("DECOMPOSITION");
 
   const selectedSuggestion = suggestions.find((s) => s.type === selectedType);
 
@@ -2095,12 +2095,14 @@ const QUALITE_API_TO_LOCAL: Record<string, Qualite> = {
 const QUALITE_LOCAL_TO_API: Record<Qualite, string> = {
   NEUF: "COMME_NEUF", BON: "BON", CORRECT: "CORRECT", USAGE: "CORRECT",
 };
-// The API enum has DECOMPOSITION (no local) and lacks AUTRE.
+// The local TypeEtape now mirrors the backend enum exactly, so the mapping is a
+// straight pass-through. Kept as named helpers so the API⇄local boundary stays
+// explicit at the call sites.
 function etapeApiToLocal(t: ApiTypeEtape): TypeEtape {
-  return t === "DECOMPOSITION" ? "AUTRE" : (t as TypeEtape);
+  return t as TypeEtape;
 }
 function etapeLocalToApi(t: TypeEtape): ApiTypeEtape {
-  return t === "AUTRE" ? "TEST" : (t as ApiTypeEtape);
+  return t as ApiTypeEtape;
 }
 
 // ─── Sold-item freeze: lock banner + correction-reason dialog ───────────────
@@ -2269,6 +2271,210 @@ function MotifDialog({
   );
 }
 
+// ─── Edit-étape dialog ──────────────────────────────────────────────────────
+// Inline editor for an existing timeline step: type, date, description and (for
+// DIAGNOSTIC) the verdict. The verdict is parsed from / written back into the
+// description prefix `[REPARABLE] …` / `[ENDOMMAGE] …` to match how steps are
+// created (BR-08).
+function parseVerdict(description: string): { verdict: VerdictDiagnostic; text: string } {
+  const m = description.match(/^\[(REPARABLE|ENDOMMAGE)\]\s?(.*)$/s);
+  if (m) return { verdict: m[1] as VerdictDiagnostic, text: m[2] };
+  return { verdict: null, text: description };
+}
+
+function EditEtapeDialog({
+  etape,
+  onSave,
+  onClose,
+}: {
+  etape: Etape;
+  onSave: (updated: Etape) => void;
+  onClose: () => void;
+}) {
+  const initial = parseVerdict(etape.description);
+  const [type, setType] = useState<TypeEtape>(etape.type);
+  const [date, setDate] = useState(etape.date ? etape.date.split("T")[0] : "");
+  const [description, setDescription] = useState(initial.text);
+  const [verdict, setVerdict] = useState<VerdictDiagnostic>(etape.verdict ?? initial.verdict);
+
+  function handleSave() {
+    onSave({
+      ...etape,
+      type,
+      date,
+      description,
+      verdict: type === "DIAGNOSTIC" ? verdict : null,
+    });
+  }
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.4)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 10000,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: T.panel,
+          borderRadius: 6,
+          padding: 24,
+          width: 480,
+          maxWidth: "90vw",
+          fontFamily: "Inter, system-ui, sans-serif",
+          boxShadow: "0 8px 30px rgba(0,0,0,0.25)",
+        }}
+      >
+        <div style={{ fontSize: 15, fontWeight: 600, color: T.graphite, marginBottom: 14 }}>
+          Modifier l'étape
+        </div>
+
+        <div style={{ display: "grid", gap: 10, marginBottom: 14 }}>
+          <div>
+            <FieldLabel>Type</FieldLabel>
+            <select
+              value={type}
+              onChange={(e) => setType(e.target.value as TypeEtape)}
+              style={{
+                fontFamily: "Inter, system-ui, sans-serif",
+                fontSize: 12,
+                border: `1px solid ${T.rule}`,
+                background: T.atelier,
+                color: T.graphite,
+                padding: "6px 8px",
+                borderRadius: 4,
+                outline: "none",
+                width: "100%",
+              }}
+            >
+              {(Object.keys(ETAPE_LABELS) as TypeEtape[]).map((k) => (
+                <option key={k} value={k}>
+                  {ETAPE_LABELS[k]}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <FieldLabel>Date</FieldLabel>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              style={{
+                fontFamily: "'IBM Plex Mono', monospace",
+                fontSize: 12,
+                border: `1px solid ${T.rule}`,
+                background: T.atelier,
+                color: T.graphite,
+                padding: "6px 8px",
+                borderRadius: 4,
+                outline: "none",
+                width: "100%",
+              }}
+            />
+          </div>
+
+          {type === "DIAGNOSTIC" && (
+            <div>
+              <FieldLabel>Verdict</FieldLabel>
+              <div style={{ display: "flex", gap: 8 }}>
+                {(
+                  [
+                    { v: "REPARABLE", label: "Réparable", color: T.verdigris },
+                    { v: "ENDOMMAGE", label: "Endommagé", color: T.oxide },
+                  ] as { v: VerdictDiagnostic; label: string; color: string }[]
+                ).map(({ v, label, color }) => (
+                  <button
+                    key={String(v)}
+                    onClick={() => setVerdict(verdict === v ? null : v)}
+                    style={{
+                      flex: 1,
+                      padding: "7px 0",
+                      fontFamily: "Inter, system-ui, sans-serif",
+                      fontSize: 12,
+                      fontWeight: 500,
+                      border: `1px solid ${verdict === v ? color : T.rule}`,
+                      background: verdict === v ? `${color}18` : T.atelier,
+                      color: verdict === v ? color : T.steel,
+                      borderRadius: 4,
+                      cursor: "pointer",
+                      transition: "all 0.15s",
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div>
+            <FieldLabel>Description</FieldLabel>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+              style={{
+                width: "100%",
+                fontFamily: "Inter, system-ui, sans-serif",
+                fontSize: 12,
+                border: `1px solid ${T.rule}`,
+                background: T.atelier,
+                color: T.graphite,
+                padding: "6px 8px",
+                borderRadius: 4,
+                outline: "none",
+                resize: "vertical",
+              }}
+            />
+          </div>
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+          <button
+            onClick={onClose}
+            style={{
+              fontSize: 12.5,
+              fontWeight: 500,
+              color: T.steel,
+              background: "none",
+              border: `1px solid ${T.rule}`,
+              padding: "8px 16px",
+              borderRadius: 4,
+              cursor: "pointer",
+            }}
+          >
+            Annuler
+          </button>
+          <button
+            onClick={handleSave}
+            style={{
+              fontSize: 12.5,
+              fontWeight: 600,
+              color: "#fff",
+              background: ETAPE_COLORS[type],
+              border: "none",
+              padding: "8px 18px",
+              borderRadius: 4,
+              cursor: "pointer",
+            }}
+          >
+            Enregistrer
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ItemEditorPage() {
   const { id } = useParams<{ id: string }>();
   const isNew = id === "new";
@@ -2282,6 +2488,7 @@ export default function ItemEditorPage() {
   const updateMut = useUpdateComposant();
   const createMut = useCreateComposant();
   const createEtapeMut = useCreateEtape();
+  const updateEtapeMut = useUpdateEtape();
   const deleteEtapeMut = useDeleteEtape();
   const reorderMut = useReorderEtape();
   const declarePiecesMut = useDeclarePieces();
@@ -2293,6 +2500,7 @@ export default function ItemEditorPage() {
   const [saved, setSaved] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [showDeclarePieces, setShowDeclarePieces] = useState(false);
+  const [editingEtapeId, setEditingEtapeId] = useState<string | null>(null);
 
   // ── Sold-item freeze ──────────────────────────────────────────────────────
   // A VENDU composant is locked. Entering "correction mode" captures a motif
@@ -2357,12 +2565,19 @@ export default function ItemEditorPage() {
     if (isNew || !etapesData) return;
     setItem((prev) => ({
       ...prev,
-      etapes: etapesData.map((e) => ({
-        id: String(e.id),
-        type: etapeApiToLocal(e.type),
-        date: e.date,
-        description: e.description,
-      })),
+      etapes: etapesData.map((e) => {
+        // BR-08: a DIAGNOSTIC verdict is stored as a `[REPARABLE] …` prefix in
+        // the description — split it back out so the badge and the next-step
+        // suggestions (which read diagnostic.verdict) work on persisted data.
+        const { verdict, text } = parseVerdict(e.description);
+        return {
+          id: String(e.id),
+          type: etapeApiToLocal(e.type),
+          date: e.date,
+          description: text,
+          verdict: e.type === "DIAGNOSTIC" ? verdict : null,
+        };
+      }),
     }));
   }, [etapesData, isNew]);
 
@@ -2466,8 +2681,27 @@ export default function ItemEditorPage() {
     deleteEtapeMut.mutate({ etapeId: Number(id), ...overrideArgs() }, { onError: onSoldEdit });
   }
 
-  function handleEditEtape() {
-    // Inline edit is not wired in this pass.
+  function handleEditEtape(id: string) {
+    if (locked) { setShowMotifDialog(true); return; }
+    setEditingEtapeId(id);
+  }
+
+  function handleEditEtapeSave(updated: Etape) {
+    if (locked) { setShowMotifDialog(true); return; }
+    // BR-08: a DIAGNOSTIC verdict is carried in the description text.
+    const description = updated.verdict
+      ? `[${updated.verdict}] ${updated.description}`
+      : updated.description;
+    updateEtapeMut.mutate(
+      {
+        etapeId: Number(updated.id),
+        input: { type: etapeLocalToApi(updated.type), date: updated.date, description, ...overrideArgs() },
+      },
+      {
+        onSuccess: () => setEditingEtapeId(null),
+        onError: onSoldEdit,
+      },
+    );
   }
 
   function handleReorder(from: number, to: number) {
@@ -2783,6 +3017,20 @@ export default function ItemEditorPage() {
           onClose={() => setShowMotifDialog(false)}
         />
       )}
+
+      {/* Edit-étape dialog */}
+      {editingEtapeId &&
+        (() => {
+          const target = item.etapes.find((e) => e.id === editingEtapeId);
+          if (!target) return null;
+          return (
+            <EditEtapeDialog
+              etape={target}
+              onSave={handleEditEtapeSave}
+              onClose={() => setEditingEtapeId(null)}
+            />
+          );
+        })()}
 
       {/* DeclarePieces dialog */}
       {showDeclarePieces && (

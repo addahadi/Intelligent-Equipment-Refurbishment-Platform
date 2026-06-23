@@ -1,4 +1,4 @@
-import { Router } from 'express';
+    import { Router } from 'express';
 import validate from '../middleware/validate.js';
 import authenticate from '../middleware/authenticate.js';
 import { favoriParamSchema, listFavorisSchema } from '../schemas/favori.schema.js';
