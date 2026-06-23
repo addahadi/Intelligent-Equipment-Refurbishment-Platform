@@ -16,6 +16,8 @@ export function toOffre(row, lang = 'fr') {
     images: row.images ?? [],
     dateOffre: toDateString(row.date_offre),
     statut: row.statut,
+    quantite: toNumber(row.quantite) ?? 1,
+    quantiteAcceptee: toNumber(row.quantite_acceptee) ?? undefined,
     entrepriseId: toNumber(row.entreprise_id),
     composantId: toNumber(row.composant_id) ?? undefined,
     // Present only when the query joined entreprise (e.g. admin list).

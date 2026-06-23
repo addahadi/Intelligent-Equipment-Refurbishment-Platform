@@ -13,7 +13,8 @@ export const submitOffreSchema = {
     reference: z.string().trim().optional(),
     categorieId: z.coerce.number().int().positive().nullish(),
     etatDeclare,
-    prixPropose: z.coerce.number().nonnegative(),
+    prixPropose: z.coerce.number().nonnegative(),    // PER UNIT
+    quantite: z.coerce.number().int().min(1).max(100).optional().default(1),
     description: z.string().trim().optional(),
     descriptionAr: z.string().trim().optional(),
     images,
@@ -33,3 +34,14 @@ export const listOffresSchema = {
 };
 
 export const offreIdSchema = { params: idParam, query: langQuery };
+
+// Accept: optionally take a subset of the offered quantity (one-shot partial).
+// Omitting `quantite` accepts the full offered quantity. The upper bound against
+// the offer's quantity is re-checked in the service (it needs the offer row).
+export const accepterOffreSchema = {
+  params: idParam,
+  query: langQuery,
+  body: z.object({
+    quantite: z.coerce.number().int().min(1).optional(),
+  }),
+};

@@ -23,7 +23,7 @@ export function useOffres(statut?: string) {
 export function useAccepterOffre() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (id: number) => accepterOffre(id),
+    mutationFn: ({ id, quantite }: { id: number; quantite?: number }) => accepterOffre(id, quantite),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['offres'] })
       qc.invalidateQueries({ queryKey: ['composants'] })

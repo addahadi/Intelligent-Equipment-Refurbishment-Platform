@@ -40,6 +40,7 @@ export interface ComposantFilters {
   qualite?: string
   prixMin?: number
   prixMax?: number
+  offreId?: number
   sort?: 'recent' | 'prix_asc' | 'prix_desc'
 }
 

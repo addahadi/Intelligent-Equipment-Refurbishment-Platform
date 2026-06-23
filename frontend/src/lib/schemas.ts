@@ -63,6 +63,8 @@ export const offreSchema = z.object({
   images: z.array(z.string()).default([]),
   dateOffre: z.string().nullable().transform((v) => v ?? ''),
   statut: statutOffre,
+  quantite: z.number().default(1),
+  quantiteAcceptee: z.number().optional(),
   entrepriseId: z.number().nullable().optional(),
   composantId: z.number().optional(),
   entreprise: z

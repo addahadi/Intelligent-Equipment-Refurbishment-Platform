@@ -21,6 +21,7 @@ interface Offre {
   statut: OffreStatus;
   description: string;
   quantite: number;
+  quantiteAcceptee?: number;
   contact: string;
   adresse: string;
   images: string[];
@@ -297,10 +298,19 @@ function DetailPanel({ offre, onAccepter, onRejeter }: DetailPanelProps) {
         {[
           { label: "Entreprise", value: offre.entreprise },
           {
-            label: "Prix proposé",
+            label: "Prix proposé / unité",
             value:
               offre.prixPropose !== null
                 ? `${offre.prixPropose.toLocaleString("fr-FR")} €`
+                : "—",
+            mono: true,
+          },
+          { label: "Quantité proposée", value: String(offre.quantite), mono: true },
+          {
+            label: "Total du lot",
+            value:
+              offre.prixPropose !== null
+                ? `${(offre.prixPropose * offre.quantite).toLocaleString("fr-FR")} €`
                 : "—",
             mono: true,
           },
@@ -312,7 +322,6 @@ function DetailPanel({ offre, onAccepter, onRejeter }: DetailPanelProps) {
               year: "numeric",
             }),
           },
-          { label: "Quantité", value: String(offre.quantite), mono: true },
           { label: "Contact", value: offre.contact },
           { label: "Adresse", value: offre.adresse },
         ].map(({ label, value, mono }) => (
@@ -470,7 +479,9 @@ function DetailPanel({ offre, onAccepter, onRejeter }: DetailPanelProps) {
             color: T.verdigris,
           }}
         >
-          Offre acceptée — composant créé en inventaire.
+          {offre.quantiteAcceptee != null && offre.quantiteAcceptee !== offre.quantite
+            ? `Offre acceptée — ${offre.quantiteAcceptee} sur ${offre.quantite} unité(s) créée(s) en inventaire.`
+            : `Offre acceptée — ${offre.quantiteAcceptee ?? offre.quantite} composant(s) créé(s) en inventaire.`}
         </div>
       )}
 
@@ -512,7 +523,8 @@ export default function OffresPage() {
         date: o.dateOffre,
         statut: o.statut,
         description: o.description ?? "",
-        quantite: 1,
+        quantite: o.quantite ?? 1,
+        quantiteAcceptee: o.quantiteAcceptee,
         contact: o.entreprise?.contact ?? "",
         adresse: o.entreprise?.adresse ?? "",
         images: o.images,
@@ -527,6 +539,12 @@ export default function OffresPage() {
   const [toast, setToast] = useState<{
     message: string;
     type: "success" | "error";
+  } | null>(null);
+  // Partial-acceptance dialog (only opened when an offer has quantity > 1).
+  const [acceptDialog, setAcceptDialog] = useState<{
+    id: string;
+    max: number;
+    qty: string;
   } | null>(null);
 
   // Default the selection to the first pending offer once data arrives.
@@ -565,19 +583,46 @@ export default function OffresPage() {
     });
   }
 
+  // Single-item offers accept directly; multi-unit offers open the quantity dialog.
   function accepterOffre(id: string) {
-    accepterMut.mutate(Number(id), {
-      onSuccess: (composant) => {
-        setToast({ message: `Offre acceptée — composant créé.`, type: "success" });
-        if (composant?.id != null) {
+    const offre = offres.find((o) => o.id === id);
+    if (offre && offre.quantite > 1) {
+      setAcceptDialog({ id, max: offre.quantite, qty: String(offre.quantite) });
+      return;
+    }
+    doAccept(id);
+  }
+
+  function doAccept(id: string, quantite?: number) {
+    accepterMut.mutate(
+      { id: Number(id), quantite },
+      {
+        onSuccess: (composants) => {
+          const n = composants?.length ?? 0;
+          setAcceptDialog(null);
+          setToast({
+            message: `Offre acceptée — ${n} composant(s) créé(s).`,
+            type: "success",
+          });
+          // Land on the lot worklist: the inventory filtered to this offer.
           setTimeout(() => {
-            window.location.href = `/admin/inventaire/${composant.id}`;
-          }, 1200);
-        }
+            window.location.href = `/admin/inventaire?offreId=${id}`;
+          }, 1000);
+        },
+        onError: (e: unknown) =>
+          setToast({ message: (e as { message?: string })?.message ?? "Échec.", type: "error" }),
       },
-      onError: (e: unknown) =>
-        setToast({ message: (e as { message?: string })?.message ?? "Échec.", type: "error" }),
-    });
+    );
+  }
+
+  function confirmAcceptDialog() {
+    if (!acceptDialog) return;
+    const n = Number(acceptDialog.qty);
+    if (!Number.isInteger(n) || n < 1 || n > acceptDialog.max) {
+      setToast({ message: `Quantité entre 1 et ${acceptDialog.max}.`, type: "error" });
+      return;
+    }
+    doAccept(acceptDialog.id, n);
   }
 
   function SortIcon({ field }: { field: keyof Offre }) {
@@ -923,6 +968,110 @@ export default function OffresPage() {
           </div>
         </div>
       </div>
+
+      {acceptDialog && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(24,33,31,0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9998,
+            padding: 24,
+          }}
+          onClick={() => setAcceptDialog(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: T.panel,
+              border: `1px solid ${T.rule}`,
+              borderRadius: 8,
+              padding: "24px 26px",
+              width: 360,
+              maxWidth: "100%",
+              boxShadow: "0 8px 32px rgba(24,33,31,0.22)",
+              fontFamily: "Inter, system-ui, sans-serif",
+            }}
+          >
+            <h3
+              style={{
+                fontSize: 15,
+                fontWeight: 600,
+                color: T.graphite,
+                marginBottom: 6,
+              }}
+            >
+              Quantité à accepter
+            </h3>
+            <p style={{ fontSize: 13, color: T.steel, lineHeight: 1.5, marginBottom: 16 }}>
+              Cette offre porte sur <strong>{acceptDialog.max}</strong> unité(s). Choisissez
+              combien accepter — autant de composants uniques seront créés.
+            </p>
+            <input
+              type="number"
+              min={1}
+              max={acceptDialog.max}
+              value={acceptDialog.qty}
+              autoFocus
+              onChange={(e) =>
+                setAcceptDialog((d) => (d ? { ...d, qty: e.target.value } : d))
+              }
+              style={{
+                width: "100%",
+                fontFamily: "'IBM Plex Mono', monospace",
+                fontSize: 15,
+                border: `1px solid ${T.rule}`,
+                borderRadius: 4,
+                padding: "10px 12px",
+                color: T.graphite,
+                outline: "none",
+                marginBottom: 18,
+              }}
+            />
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                onClick={() => setAcceptDialog(null)}
+                style={{
+                  flex: 1,
+                  padding: "10px 0",
+                  fontSize: 13,
+                  fontWeight: 500,
+                  border: `1px solid ${T.rule}`,
+                  background: "transparent",
+                  color: T.steel,
+                  borderRadius: 4,
+                  cursor: "pointer",
+                }}
+              >
+                Annuler
+              </button>
+              <button
+                onClick={confirmAcceptDialog}
+                disabled={accepterMut.isPending}
+                style={{
+                  flex: 2,
+                  padding: "10px 0",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  border: "none",
+                  background: T.verdigris,
+                  color: "#fff",
+                  borderRadius: 4,
+                  cursor: accepterMut.isPending ? "wait" : "pointer",
+                  opacity: accepterMut.isPending ? 0.7 : 1,
+                }}
+              >
+                Accepter et créer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {toast && (
         <Toast

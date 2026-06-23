@@ -13,8 +13,12 @@ export const list = asyncHandler(async (req, res) => {
 });
 
 export const accepter = asyncHandler(async (req, res) => {
-  const composant = await offreService.accepter(req.params.id, resolveLang(req));
-  res.status(201).json(composant);
+  const composants = await offreService.accepter(
+    req.params.id,
+    req.body?.quantite,
+    resolveLang(req),
+  );
+  res.status(201).json(composants);
 });
 
 export const rejeter = asyncHandler(async (req, res) => {

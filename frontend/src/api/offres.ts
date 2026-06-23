@@ -1,5 +1,5 @@
 import api from '../lib/axios'
-import { offreSchema, offreListSchema, composantSchema } from '../lib/schemas'
+import { offreSchema, offreListSchema, composantListSchema } from '../lib/schemas'
 import type { Offre, Composant, TypeComposant, EtatDeclare } from '../types'
 
 export interface SubmitOffreInput {
@@ -11,7 +11,8 @@ export interface SubmitOffreInput {
   reference?: string
   categorieId?: number
   etatDeclare: EtatDeclare
-  prixPropose: number
+  prixPropose: number     // per unit
+  quantite?: number       // default 1, max 100
   description?: string
   images?: string[]
   entreprise: { nom: string; contact: string; adresse?: string }
@@ -28,10 +29,12 @@ export async function listOffres(statut?: string): Promise<Offre[]> {
   return offreListSchema.parse(data) as Offre[]
 }
 
-// Accept returns the newly created EN_RECONDITIONNEMENT composant.
-export async function accepterOffre(id: number): Promise<Composant> {
-  const { data } = await api.post(`/offres/${id}/accepter`)
-  return composantSchema.parse(data) as unknown as Composant
+// Accept fans the offer out into `quantite` unique EN_RECONDITIONNEMENT
+// composants and returns the full list (the lot worklist). Omitting `quantite`
+// accepts the full offered quantity.
+export async function accepterOffre(id: number, quantite?: number): Promise<Composant[]> {
+  const { data } = await api.post(`/offres/${id}/accepter`, quantite == null ? {} : { quantite })
+  return composantListSchema.parse(data) as unknown as Composant[]
 }
 
 export async function rejeterOffre(id: number): Promise<Offre> {

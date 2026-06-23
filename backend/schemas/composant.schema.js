@@ -66,6 +66,7 @@ export const listComposantsSchema = {
     qualite: qualiteEtat.optional(),
     prixMin: z.coerce.number().nonnegative().optional(),
     prixMax: z.coerce.number().nonnegative().optional(),
+    offreId: z.coerce.number().int().positive().optional(),  // lot worklist (FR-22)
     sort: z.enum(['recent', 'prix_asc', 'prix_desc']).optional().default('recent'),
   }),
 };

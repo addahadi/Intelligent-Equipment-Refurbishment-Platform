@@ -128,7 +128,7 @@ Try everything via `backend/requests.http` (VS Code **REST Client** extension).
 | POST | `/etapes/:id/reorder` | admin | `{ direction: "up"\|"down" }` |
 | POST | `/offres` | public | submit offer (FR-17) |
 | GET | `/offres` | admin | filter by `statut` |
-| POST | `/offres/:id/accepter` | admin | creates a composant from the offer (FR-22) |
+| POST | `/offres/:id/accepter` | admin | fans the offer out into N unique composants (FR-22); optional `quantite` accepts a subset |
 | POST | `/offres/:id/rejeter` | admin | |
 | GET | `/favoris` | client | |
 | PUT | `/favoris/:composantId` | client | add |

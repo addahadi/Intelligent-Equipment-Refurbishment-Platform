@@ -1,149 +1,152 @@
-  # Plan — Lock traceability of sold composants (with audited override)
+# Plan — Introduce quantity to offers (World A: offer-stage quantity, fan-out into unique composants)
 
-  ## 1. The problem
+## 1. The goal
 
-  Today, an admin can edit **any** composant (part or organ) and freely rewrite its
-  traceability timeline — even after a client has bought it.
+Today every flow assumes a **unique physical item**: `composant.reference` is unique,
+`commande` has `unique(composant_id)` (one sale per item), each composant carries its own
+traceability timeline, warranty and quality grade. A maintenance company can only offer one
+object per offer.
 
-  When a client purchases an object, the buy flow (`acheter_composant()` in the DB) flips
-  `composant.etat_actuel` to `VENDU` and creates a `commande` row. But **nothing stops an
-  admin from editing that sold item afterward**:
+We want a company to offer **multiple identical objects** in a single submission (e.g. "20
+pistons"), and the admin to accept a **chosen quantity** of them (e.g. 14 of 20). Everything
+downstream of acceptance stays exactly as it is: each accepted unit becomes its **own** unique
+composant with its own reference, traceability, warranty and (eventual) sale.
 
-  | Operation | Current behavior | Location |
-  |---|---|---|
-  | Update composant fields | Allowed, no state check | `backend/services/composant.service.js` → `update` |
-  | Add a timeline step | Allowed, no state check | `backend/services/etape.service.js` → `create` |
-  | Edit a timeline step | Allowed, no state check | `backend/services/etape.service.js` → `update` |
-  | Delete a timeline step | Allowed, no state check | `backend/services/etape.service.js` → `remove` |
-  | Reorder timeline steps | Allowed, no state check | `backend/services/etape.service.js` → `reorder` |
+This is **World A** — quantity is an *intake convenience*, not a catalog stock model. The
+client-facing catalog, purchase flow, traceability and the sold-item freeze are untouched.
 
-  The traceability is part of what the client paid for (provenance, warranty, what was
-  reconditioned). If an admin can silently rewrite it after sale, the client's record can
-  be falsified — an integrity and trust problem.
+> Context for the jury: per-unit traceability is still done manually by the admin. The future
+> `technicien` actor and AI assistance (out of scope here) will reduce that burden. We are
+> deliberately **not** auto-copying timelines across siblings — those units are not truly
+> identical (different diagnostics/repairs), so a shared timeline would be a falsehood.
 
-  ## 2. The policy we agreed on
+## 2. Decisions (all agreed)
 
-  **Freeze by default, allow an audited correction.**
+| # | Decision | Rationale |
+|---|---|---|
+| Model | **World A** — quantity lives on the offer; acceptance fans out into N unique composants | Preserves per-item traceability, unique reference, no-double-sale, warranty snapshot — the platform's whole integrity model |
+| Price semantics | `offre.prix_propose` is **per unit** | Makes partial acceptance honest (14 × unit) and is migration-safe (qty 1 → per-unit == total) |
+| Acceptance | **One-shot partial**: admin picks a quantity once; remainder implicitly declined; offer terminal | Matches a real intake decision; no half-open offers to bookkeep |
+| Accepted record | Store the **number** (`quantite_acceptee`) on the offer; keep `statut = ACCEPTEE` | Records the truth ("14 of 20") without enum churn |
+| Fan-out refs | `BASE-NN` where `BASE = offre.reference || OFFRE-{id}`, `NN` = zero-padded per-unit sequence | Unique within lot (seq) and across lots (offer id); human-readable lineage; admin renames pre-sale |
+| Sibling grouping | **Free via shared `offre_id`** — no new lot/batch column | Already on `composant`; "all units from offer X" = `where offre_id = X` |
+| Post-accept landing | **Worklist**: admin lands on the inventory list filtered to `offre_id = X` | Turns "N items to process" into a visible checklist |
+| Copy helper | **Deferred** (manual per-unit traceability for now) | That automation belongs to the future technicien/AI actor; auto-copy would manufacture a traceability lie |
+| Scope of quantity | **Both ORGANE and PIECE**; field optional, **default 1**, **cap 100** | No type-conditional logic; backward-compatible; cap bounds the fan-out (and `/offres` is public, so the cap is defensive) |
+| Dashboard | **No new metrics** | Fanned-out units are real composant rows, so existing FR-34 counts/revenue absorb them |
 
-  - Once a composant is `VENDU`, **all** edits to it are blocked — both its own fields
-    *and* its entire traceability timeline.
-  - A deliberate **override** (explicit flag + a mandatory written reason) lets a genuine
-    correction through.
-  - Every override writes a **forensic audit record** (who / when / what operation / why /
-    before & after values).
+## 3. What we will build
 
-  ### Decisions and why
+### 3.1 Database — two columns on `offre` (+ migration)
+**Files:** `backend/schema.sql`, new `backend/migrations/002_offre_quantite.sql`
 
-  | # | Decision | Why |
-  |---|---|---|
-  | Scope of freeze | **Everything** — composant fields + all 5 timeline operations | A blanket rule is simple to explain and defend to a client. "Frozen means frozen." The override handles the rare legitimate exception. |
-  | Hierarchy | **Lock only the exact sold row** — no propagation to parent/child | An organ sold *whole* has no child pieces (pieces only exist when an organ is damaged and recycled). The two states are mutually exclusive, so there is nothing to propagate to. |
-  | States covered | **`VENDU` only** (not `RECYCLE`) | The concern is client-facing records. No client relies on a recycled item's history. Easy to widen later if needed. |
-  | Override mechanism | **Flag + mandatory reason**, any admin | Keeps a single admin role. The two-part action (flag + reason) makes the override deliberate, never accidental. The reason is what makes the audit meaningful. |
-  | Audit storage | **Dedicated table, override-only, with before/after** | Scoped exactly to this edge case. Keeps the client-facing timeline clean. Before/after gives real forensic value in a dispute. |
-  | Enforcement layer | **Service layer (Node)**, edit + audit in one transaction | All existing edit authorization lives in the service layer. The override context (flag + reason) is naturally available there. |
-  | Race safety | **`SELECT ... FOR UPDATE`** inside the edit transaction | Closes the "admin edits while client buys" window. Symmetric with the existing `acheter_composant()` lock. |
-  | API error | **409 with distinct code `COMPOSANT_VENDU`** | Lets the frontend distinguish "locked" from other 409s (e.g. double-sale) and offer the override path. |
-  | Frontend UX | **Proactive lock** — banner + read-only, explicit "make a correction" action with a reason dialog | The admin sees the lock immediately and never wastes effort on an edit that gets rejected. |
+```sql
+alter table public.offre
+  add column quantite          int not null default 1 check (quantite >= 1 and quantite <= 100),
+  add column quantite_acceptee int          check (quantite_acceptee is null
+                                                    or (quantite_acceptee >= 1 and quantite_acceptee <= quantite));
+```
 
-  ## 3. What we will build
+Migration is idempotent (`add column if not exists`) and backfills existing accepted offers:
 
-  ### 3.1 Database — new audit table
-  **File:** `backend/schema.sql`
+```sql
+update public.offre set quantite_acceptee = 1 where statut = 'ACCEPTEE' and quantite_acceptee is null;
+```
 
-  ```sql
-  create table journal_modification (
-    id            bigint generated always as identity primary key,
-    composant_id  bigint not null references composant(id),
-    profil_id     bigint not null references profil(id),   -- the admin who made the change
-    date          timestamptz not null default now(),
-    operation     text   not null,   -- COMPOSANT_UPDATE | ETAPE_CREATE | ETAPE_UPDATE | ETAPE_DELETE | ETAPE_REORDER
-    motif         text   not null,   -- the admin's written reason
-    details       jsonb  not null    -- { "before": {...}, "after": {...} }
-  );
-  create index on journal_modification (composant_id);
-  ```
+`prix_propose` is unchanged in shape; only its **meaning** becomes "per unit" (qty 1 rows are
+identical either way, so no data migration).
 
-  Append-only. Internal accountability only — never shown to clients.
+### 3.2 Backend — submission accepts quantity
+**Files:** `backend/schemas/offre.schema.js`, `backend/services/offre.service.js`
 
-  ### 3.2 Backend — the guard
-  **Files:** `backend/services/composant.service.js`, `backend/services/etape.service.js`
+- `submitOffreSchema.body`: add `quantite: z.coerce.number().int().min(1).max(100).optional().default(1)`.
+- `submit()`: include `quantite: body.quantite` in the inserted `offre` columns.
 
-  A shared helper, run **inside the edit's transaction**:
+### 3.3 Backend — accept fans out N composants
+**Files:** `backend/schemas/offre.schema.js`, `backend/controllers/offre.controller.js`,
+`backend/services/offre.service.js`
 
-  ```
-  guardSoldComposant(tx, composantId, { override, motif, profilId, operation }):
-    1. row = SELECT etat_actuel FROM composant WHERE id = composantId FOR UPDATE
-    2. if row.etat_actuel != 'VENDU'        -> return (normal edit, no audit)
-    3. if VENDU and not override            -> throw 409 COMPOSANT_VENDU
-    4. if VENDU and override:
-        - require non-empty motif
-        - capture `before`
-        - (caller performs the edit)
-        - capture `after`
-        - INSERT one journal_modification row
-      ... all in the same transaction as the edit
-  ```
+- New `accepterOffreSchema = { params: idParam, query: langQuery, body: z.object({ quantite: z.coerce.number().int().min(1).optional() }) }`.
+- Route `POST /offres/:id/accepter` uses it; controller passes `req.body.quantite` into the service.
+- `accepter(offreId, quantite, lang)`:
+  1. Load offer; guard `statut === 'EN_ATTENTE'` (else 409, unchanged).
+  2. Resolve `n = quantite ?? offre.quantite`; validate `1 ≤ n ≤ offre.quantite` (else `VALIDATION_ERROR`).
+  3. In one transaction, loop `i = 1..n`:
+     - `base = offre.reference || 'OFFRE-' + offre.id`
+     - `reference = base + '-' + String(i).padStart(2, '0')`
+     - insert composant with the existing pre-fill (`type_composant`, `nom_*`, `marque`,
+       `modele`, `categorie_id`, `qualite: 'BON'`, `prix: 0`, `garantie: 12`, `images`,
+       `description_*`, `etat_actuel: 'EN_RECONDITIONNEMENT'`, `offre_id: offre.id`).
+     - collect the created row.
+  4. `update offre set statut = 'ACCEPTEE', quantite_acceptee = n where id = offreId`.
+  5. Return the **array** of created composants (mapped).
 
-  Wire it into all five operations:
-  - `composant.service.js` → `update`
-  - `etape.service.js` → `create`, `update`, `remove`, `reorder`
+> The unique-reference index is the safety net: a genuine cross-offer collision (company reused
+> a reference string) throws at insert; acceptable because units are pre-sale and renameable.
 
-  For etape operations, resolve the owning `composant_id` first (the etape FKs to it),
-  then guard that composant.
+### 3.4 Backend — offre mapper & list expose quantity
+**Files:** `backend/services/mappers/offre.mapper.js`
 
-  `acheter_composant()` itself is left untouched — you can't buy an already-sold item.
+- `toOffre`: add `quantite: toNumber(row.quantite) ?? 1` and
+  `quantiteAcceptee: toNumber(row.quantite_acceptee) ?? undefined`.
 
-  ### 3.3 Backend — request contract & validation
-  **Files:** `backend/schemas/composant.schema.js`, `backend/schemas/etape.schema.js`, controllers
+### 3.5 Backend — composant list gains an `offreId` filter (worklist)
+**Files:** `backend/schemas/composant.schema.js`, `backend/services/composant.service.js`
 
-  - Add optional `override: boolean` and `motif: string` to the relevant request bodies.
-  - Validation rule: if `override === true`, `motif` must be a non-empty trimmed string
-    (with a sane max length).
-  - Controllers pass `{ override, motif }` plus the authenticated `profil_id` into the
-    service.
+- `listComposantsSchema.query`: add `offreId: z.coerce.number().int().positive().optional()`.
+- `list()`: `if (offreId) conds.push(sql\`offre_id = ${offreId}\`)`.
 
-  ### 3.4 Backend — error code
-  **File:** the `AppError` / error-handling module
+### 3.6 Frontend — types & schemas
+**Files:** `frontend/src/lib/schemas.ts`, `frontend/src/types/index.ts`
 
-  Ensure the conflict carries the stable code `COMPOSANT_VENDU`, distinct from the existing
-  double-sale 409, so the frontend can branch on it.
+- `offreSchema`: add `quantite: z.number().default(1)`, `quantiteAcceptee: z.number().optional()`.
+- `Offre` interface: add `quantite: number`, `quantiteAcceptee?: number`.
 
-  ### 3.5 Frontend — API + hooks
-  **Files:** `frontend/src/api/composants.ts`, `frontend/src/api/etapes.ts`, `frontend/src/hooks/*`
+### 3.7 Frontend — submission form
+**Files:** `frontend/src/api/offres.ts`, `frontend/src/pages/ProposerPage.tsx`
 
-  - Thread optional `override` + `motif` through the five mutation calls.
-  - In the hooks' error handling, detect `COMPOSANT_VENDU` and surface it as a structured
-    "locked" signal instead of a generic failure.
+- `SubmitOffreInput`: add `quantite?: number`.
+- Form: add a **Quantité** number field (default 1, min 1, max 100) in the "Équipement"
+  fieldset; validate `1 ≤ n ≤ 100`; pass `quantite` in the submit payload.
 
-  ### 3.6 Frontend — proactive lock UI
-  **File:** `frontend/src/pages/admin/ItemEditorPage.tsx`
+### 3.8 Frontend — accept with quantity + worklist landing
+**Files:** `frontend/src/api/offres.ts`, `frontend/src/hooks/offres.ts`,
+`frontend/src/pages/admin/OffresPage.tsx`, `frontend/src/pages/admin/InventairePage.tsx`
 
-  - On load, if `etat_actuel === 'VENDU'`: show a **"Vendu — verrouillé"** banner and render
-    all fields + the timeline read-only.
-  - An **"Apporter une correction"** action unlocks editing.
-  - On save in correction mode, open a confirmation dialog requiring a **motif**; submit
-    with `override: true` + `motif`.
-  - Safety net: if a `COMPOSANT_VENDU` 409 still comes back (item sold mid-edit), prompt for
-    the reason and retry with override.
+- `accepterOffre(id, quantite?)` → `POST /offres/:id/accepter` with `{ quantite }`; return
+  `Composant[]` (parse with `composantListSchema`).
+- `useAccepterOffre`: mutation input becomes `{ id, quantite }`.
+- `OffresPage`:
+  - Adapter maps the real `o.quantite` (drop the hardcoded `1`); show offered quantity,
+    per-unit price, and a computed **lot total** (`quantite × prixPropose`) in `DetailPanel`.
+  - Accept action: if `quantite > 1`, open a small dialog with a number input pre-filled to the
+    full quantity (`1 ≤ n ≤ quantite`); on confirm, accept with `n`.
+  - On success, navigate to the **worklist**: `/admin/inventaire?offreId=${offre.id}`
+    (instead of the single-item editor).
+- `InventairePage`: read `offreId` from the URL query and pass it as a list filter; show a small
+  "Lot de l'offre #X (n unités)" banner with a clear-filter control.
 
-  ## 4. Build order
+## 4. Build order
 
-  1. `schema.sql` → add `journal_modification` table, migrate.
-  2. Backend guard helper + wire into the 5 operations (`FOR UPDATE` + audit insert).
-  3. Schema validation + error code + controller plumbing.
-  4. Frontend API/hooks contract.
-  5. `ItemEditorPage` lock banner + correction dialog.
-  6. Test (see below).
+1. `schema.sql` + `002_offre_quantite.sql` (apply migration).
+2. Backend: offre schema (submit + accept), `accepter()` fan-out, mapper, composant `offreId` filter.
+3. Frontend: types/schemas → API/hooks → ProposerPage quantity field → OffresPage accept dialog + lot total → InventairePage offreId filter.
+4. Test (matrix below).
 
-  ## 5. Test matrix
+## 5. Test matrix
 
-  | Scenario | Expected |
-  |---|---|
-  | Edit an unsold (`EN_VENTE`) item | Passes, no audit row |
-  | Edit a `VENDU` item without override | Rejected, 409 `COMPOSANT_VENDU` |
-  | Edit a `VENDU` item with override + motif | Passes, one `journal_modification` row with before/after |
-  | Override with empty/missing motif | Rejected by validation |
-  | Client buys item while admin is mid-edit | Admin's save now requires override (no silent stale edit) |
-  | Each of the 5 operations on a sold item | All guarded consistently |
-  | `RECYCLE` item | Still editable (out of scope by design) |
+| Scenario | Expected |
+|---|---|
+| Submit offer with no quantity | `quantite = 1` (backward compatible) |
+| Submit offer with quantity 20 | Stored `quantite = 20` |
+| Submit quantity 0 / 101 / non-int | `VALIDATION_ERROR` |
+| Accept full (omit body) on a qty-20 offer | 20 composants `OFFRE-X-01..20`, `quantite_acceptee = 20`, status ACCEPTEE |
+| Accept 14 of 20 | 14 composants `…-01..14`, `quantite_acceptee = 14`, status ACCEPTEE |
+| Accept 21 of 20 / 0 of 20 | `VALIDATION_ERROR`, no rows created |
+| Accept an already-processed offer | 409 (unchanged) |
+| Fan-out references | All unique; admin can rename pre-sale |
+| Worklist landing | Lands on inventory filtered to `offre_id = X`, showing exactly the created units |
+| Existing single offers / composants | Unchanged; dashboard counts/revenue unchanged |
+| Each unit sold independently | Existing purchase + sold-freeze flow works per unit |
+</content>
+</invoke>

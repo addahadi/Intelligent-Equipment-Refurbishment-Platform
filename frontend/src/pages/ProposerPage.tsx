@@ -36,6 +36,7 @@ interface FormData {
   marque: string;
   modele: string;
   reference: string;
+  quantite: string;
   categorieId: number | '';
   etatDeclare: EtatDeclare | '';
   // Prix & détails
@@ -55,6 +56,7 @@ const INITIAL_FORM: FormData = {
   marque: '',
   modele: '',
   reference: '',
+  quantite: '1',
   categorieId: '',
   etatDeclare: '',
   prixPropose: '',
@@ -738,6 +740,12 @@ export default function ProposerPage() {
     if (!form.marque.trim()) e.marque = 'Requis.';
     if (!form.modele.trim()) e.modele = 'Requis.';
     if (!form.reference.trim()) e.reference = 'Requis.';
+    {
+      const q = Number(form.quantite);
+      if (!form.quantite || !Number.isInteger(q) || q < 1 || q > 100) {
+        e.quantite = 'Quantité entre 1 et 100.';
+      }
+    }
     if (form.categorieId === '') e.categorieId = 'Sélectionnez une catégorie.';
     if (!form.etatDeclare) e.etatDeclare = 'Sélectionnez un état.';
     if (!form.prixPropose || isNaN(Number(form.prixPropose)) || Number(form.prixPropose) <= 0) {
@@ -765,6 +773,7 @@ export default function ProposerPage() {
         marque: form.marque.trim(),
         modele: form.modele.trim(),
         reference: form.reference.trim(),
+        quantite: Number(form.quantite),
         etatDeclare: form.etatDeclare as EtatDeclare,
         images: form.images,
         entreprise: {
@@ -974,15 +983,33 @@ export default function ProposerPage() {
                         placeholder="Ex. : M2BAX 132MA4"
                       />
                     </div>
-                    <Field
-                      label="Référence fabricant"
-                      id="eq-reference"
-                      value={form.reference}
-                      onChange={set('reference')}
-                      error={errors.reference}
-                      required
-                      placeholder="Numéro de série ou référence catalogue"
-                    />
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '2fr 1fr',
+                        gap: 12,
+                      }}
+                    >
+                      <Field
+                        label="Référence fabricant"
+                        id="eq-reference"
+                        value={form.reference}
+                        onChange={set('reference')}
+                        error={errors.reference}
+                        required
+                        placeholder="Numéro de série ou référence catalogue"
+                      />
+                      <Field
+                        label="Quantité"
+                        id="eq-quantite"
+                        type="number"
+                        value={form.quantite}
+                        onChange={set('quantite')}
+                        error={errors.quantite}
+                        required
+                        placeholder="1"
+                      />
+                    </div>
                     <SelectField
                       label="Catégorie"
                       id="eq-categorie"

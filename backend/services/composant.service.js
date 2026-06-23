@@ -80,10 +80,11 @@ function buildColumns(body, { partial }) {
 }
 
 export async function list(filters, lang) {
-  const { etat, search, categorieId, type, marque, qualite, prixMin, prixMax, sort } = filters;
+  const { etat, search, categorieId, type, marque, qualite, prixMin, prixMax, sort, offreId } = filters;
 
   const conds = [];
   if (etat) conds.push(sql`etat_actuel = ${etat}`);
+  if (offreId) conds.push(sql`offre_id = ${offreId}`);   // lot worklist (FR-22)
   if (categorieId) conds.push(sql`categorie_id = ${categorieId}`);
   if (type) conds.push(sql`type_composant = ${type}`);
   if (marque) conds.push(sql`marque = ${marque}`);

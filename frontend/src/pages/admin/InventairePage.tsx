@@ -182,7 +182,15 @@ export default function InventairePage() {
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [search, setSearch] = useState("");
 
-  const { data: apiComposants } = useComposants({});
+  // Lot worklist: when arriving from an accepted offer (/admin/inventaire?offreId=X),
+  // scope the inventory to exactly the units fanned out from that offer.
+  const offreId = useMemo(() => {
+    const v = new URLSearchParams(window.location.search).get("offreId");
+    const n = v ? Number(v) : NaN;
+    return Number.isInteger(n) && n > 0 ? n : undefined;
+  }, []);
+
+  const { data: apiComposants } = useComposants(offreId ? { offreId } : {});
   const { data: categoriesData } = useCategories();
 
   const composants: Composant[] = useMemo(() => {
@@ -515,6 +523,45 @@ export default function InventairePage() {
 
         {/* Content */}
         <div className="inv-content">
+          {offreId != null && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+                background: `${T.verdigris}10`,
+                border: `1px solid ${T.verdigris}40`,
+                borderRadius: 4,
+                padding: "10px 14px",
+                marginBottom: 14,
+                fontSize: 13,
+                color: T.verdigris,
+              }}
+            >
+              <span>
+                Lot de l'offre #{offreId} — {composants.length} unité
+                {composants.length !== 1 ? "s" : ""} à traiter.
+              </span>
+              <button
+                onClick={() => navigateTo("/admin/inventaire")}
+                style={{
+                  background: "transparent",
+                  border: `1px solid ${T.verdigris}60`,
+                  color: T.verdigris,
+                  fontFamily: "Inter, system-ui, sans-serif",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  padding: "5px 12px",
+                  borderRadius: 4,
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Voir tout l'inventaire
+              </button>
+            </div>
+          )}
           <div className="row-count">
             {filtered.length} composant{filtered.length !== 1 ? "s" : ""}
           </div>

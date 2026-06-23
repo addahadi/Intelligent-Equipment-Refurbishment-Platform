@@ -127,6 +127,12 @@ create table public.offre (
   description_ar text,
   date_offre     date not null default current_date,
   statut         statut_offre not null default 'EN_ATTENTE',        -- FR-18
+  -- Quantity (World A): one offer may cover several identical objects.
+  -- prix_propose is PER UNIT. On acceptance the admin picks how many to take
+  -- (quantite_acceptee), and that many unique composants are fanned out.
+  quantite          int not null default 1 check (quantite >= 1 and quantite <= 100),
+  quantite_acceptee int          check (quantite_acceptee is null
+                                         or (quantite_acceptee >= 1 and quantite_acceptee <= quantite)),
   created_at     timestamptz not null default now(),
   updated_at     timestamptz not null default now()
 );

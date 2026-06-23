@@ -357,6 +357,7 @@ Content-Type: application/json
   "categorieId": 1,
   "etatDeclare": "DEFECTUEUX",
   "prixPropose": 1200.00,
+  "quantite": 5,
   "description": "5 unités, à reconditionner.",
   "images": [],
   "entreprise": {
@@ -370,9 +371,15 @@ Content-Type: application/json
 GET {{baseUrl}}/offres?statut=EN_ATTENTE&lang={{lang}}
 Authorization: Bearer {{adminToken}}
 
-### Accept an offer (admin, FR-22) → returns the new EN_RECONDITIONNEMENT composant
+### Accept an offer (admin, FR-22) → fans out into N unique composants (the lot worklist).
+### Omit "quantite" to accept the full offered quantity; pass it to accept a subset (one-shot partial).
 POST {{baseUrl}}/offres/1/accepter?lang={{lang}}
 Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "quantite": 3
+}
 
 ### Reject an offer (admin)
 POST {{baseUrl}}/offres/1/rejeter?lang={{lang}}

@@ -23,7 +23,8 @@ export async function submit(body, lang) {
       modele: body.modele ?? null,
       reference: body.reference ?? null,
       etat_declare: body.etatDeclare,
-      prix_propose: body.prixPropose,
+      prix_propose: body.prixPropose,                 // per unit
+      quantite: body.quantite ?? 1,
       images: body.images ?? [],
       description_fr: body.description ?? null,
       description_ar: body.descriptionAr ?? null,
@@ -51,38 +52,56 @@ export async function list(filters, lang) {
   return rows.map((r) => toOffre(r, lang));
 }
 
-// FR-22 — accept: create an EN_RECONDITIONNEMENT composant pre-filled from the
-// offer, flip the offer to ACCEPTEE, and link them.
-export async function accepter(offreId, lang) {
+// FR-22 — accept: fan the offer out into `quantite` unique EN_RECONDITIONNEMENT
+// composants (World A), each pre-filled from the offer with its own unique
+// reference, then flip the offer to ACCEPTEE recording how many were taken.
+// `quantite` is optional; when omitted the full offered quantity is accepted.
+// Returns the list of created composants (the admin worklist for this lot).
+export async function accepter(offreId, quantite, lang) {
   const [offre] = await sql`select * from offre where id = ${offreId}`;
   if (!offre) throw AppError.notFound('Offre introuvable.');
   if (offre.statut !== 'EN_ATTENTE') {
     throw AppError.conflict('Cette offre a déjà été traitée.');
   }
 
+  const offered = Number(offre.quantite) || 1;
+  const n = quantite == null ? offered : quantite;
+  if (!Number.isInteger(n) || n < 1 || n > offered) {
+    throw AppError.badRequest(
+      `La quantité acceptée doit être comprise entre 1 et ${offered}.`,
+    );
+  }
+
+  // composant.reference is NOT NULL unique; fall back when the offer had none.
+  const base = offre.reference || `OFFRE-${offre.id}`;
+  const width = Math.max(2, String(n).length);
+
   return sql.begin(async (tx) => {
-    const cols = {
-      type_composant: offre.type_propose,
-      nom_fr: offre.designation_fr,
-      nom_ar: offre.designation_ar,
-      // composant.reference is NOT NULL unique; fall back when the offer had none.
-      reference: offre.reference || `OFFRE-${offre.id}`,
-      marque: offre.marque,
-      modele: offre.modele,
-      categorie_id: offre.categorie_id,
-      qualite: 'BON',
-      prix: 0,
-      garantie: 12,
-      images: offre.images ?? [],
-      description_fr: offre.description_fr,
-      description_ar: offre.description_ar,
-      etat_actuel: 'EN_RECONDITIONNEMENT',
-      offre_id: offre.id,
-    };
-    const [composant] = await tx`insert into composant ${tx(cols)} returning *`;
+    const created = [];
+    for (let i = 1; i <= n; i += 1) {
+      const cols = {
+        type_composant: offre.type_propose,
+        nom_fr: offre.designation_fr,
+        nom_ar: offre.designation_ar,
+        reference: `${base}-${String(i).padStart(width, '0')}`,
+        marque: offre.marque,
+        modele: offre.modele,
+        categorie_id: offre.categorie_id,
+        qualite: 'BON',
+        prix: 0,
+        garantie: 12,
+        images: offre.images ?? [],
+        description_fr: offre.description_fr,
+        description_ar: offre.description_ar,
+        etat_actuel: 'EN_RECONDITIONNEMENT',
+        offre_id: offre.id,
+      };
+      const [composant] = await tx`insert into composant ${tx(cols)} returning *`;
+      created.push(composant);
+    }
     // Lineage is composant.offre_id (set above); offre has no composant_id column.
-    await tx`update offre set statut = 'ACCEPTEE' where id = ${offreId}`;
-    return toComposant(composant, lang);
+    await tx`update offre set statut = 'ACCEPTEE', quantite_acceptee = ${n} where id = ${offreId}`;
+    return created.map((c) => toComposant(c, lang));
   });
 }
 
