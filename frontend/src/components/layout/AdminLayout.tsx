@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../store/AppContext';
 import { useOffres } from '../../hooks/offres';
+import Logo from '../shared/Logo';
 
 // ─── Token constants (match index.css vars) ───────────────────────────────────
 
@@ -215,31 +216,7 @@ export default function AdminLayout() {
               flexShrink: 0,
             }}
           >
-            <div
-              style={{
-                fontFamily: "'Archivo', sans-serif",
-                fontSize: 14,
-                fontWeight: 700,
-                color: T.graphite,
-                letterSpacing: '-0.01em',
-                lineHeight: '1.25',
-              }}
-            >
-              Le Passeport
-            </div>
-            <div
-              style={{
-                fontFamily: "'IBM Plex Mono', monospace",
-                fontSize: 10,
-                fontWeight: 500,
-                color: T.steel,
-                letterSpacing: '0.1em',
-                textTransform: 'uppercase',
-                marginTop: 3,
-              }}
-            >
-              Admin
-            </div>
+            <Logo size={26} subtitle="Admin" />
           </div>
 
           {/* Navigation */}

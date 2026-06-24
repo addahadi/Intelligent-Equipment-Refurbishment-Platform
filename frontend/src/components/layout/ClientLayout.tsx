@@ -4,6 +4,7 @@ import { Home, Heart, ShoppingBag, User, PackagePlus } from 'lucide-react';
 import { useApp } from '../../store/AppContext';
 import { useFavorisIds } from '../../hooks/favoris';
 import { ToastContainer } from '../shared/Toast';
+import Logo from '../shared/Logo';
 
 // ─── Tab definition ───────────────────────────────────────────────────────────
 
@@ -56,18 +57,13 @@ export default function ClientLayout() {
         <Link
           to="/"
           style={{
-            fontFamily: "'Archivo', sans-serif",
-            fontWeight: 700,
-            fontSize: '17px',
-            letterSpacing: '-0.02em',
-            color: 'var(--graphite)',
+            display: 'inline-flex',
             textDecoration: 'none',
             flexShrink: 0,
-            lineHeight: 1,
           }}
-          aria-label="Le Passeport — accueil"
+          aria-label="RECONDITECH — accueil"
         >
-          Le Passeport
+          <Logo size={26} />
         </Link>
 
         {/* Center placeholder — search lives on the catalogue page */}

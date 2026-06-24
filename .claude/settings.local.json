@@ -61,7 +61,11 @@
       "Bash(gh pr *)",
       "PowerShell($g = Get-Command gh -ErrorAction SilentlyContinue; if \\($g\\) { \"gh: $\\($g.Source\\)\" } else { \"gh NOT FOUND\" })",
       "Bash(curl -s -A 'SahAnalytics-Seed/1.0 \\(youcef.missoum@sahanalytics.com\\)' 'https://commons.wikimedia.org/w/api.php?action=query&format=json&generator=search&gsrnamespace=6&gsrlimit=3&gsrsearch=electric%20motor%20industrial&prop=imageinfo&iiprop=url|mime|size&iiurlwidth=900')",
-      "PowerShell(cd D:\\\\Start-up\\\\frontend; npx tsc -b 2>&1 | ForEach-Object { \\($_ -split '\\\\\\('\\)[0] } | Sort-Object -Unique)"
+      "PowerShell(cd D:\\\\Start-up\\\\frontend; npx tsc -b 2>&1 | ForEach-Object { \\($_ -split '\\\\\\('\\)[0] } | Sort-Object -Unique)",
+      "Bash(ls -la src)",
+      "Bash(ls -la public)",
+      "Bash(echo \"EXIT:$?\")",
+      "Artifact"
     ]
   }
 }

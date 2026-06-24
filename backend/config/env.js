@@ -16,7 +16,7 @@ const env = {
   cloudinaryUrl: process.env.CLOUDINARY_URL,
   port: Number(process.env.PORT) || 3000,
   corsOrigin: process.env.CORS_ORIGIN || '*',
-  adminSeedPassword: process.env.ADMIN_SEED_PASSWORD || 'change_me',
+  adminSeedPassword: process.env.ADMIN_SEED_PASSWORD || 'admin',
 };
 
 export default env;

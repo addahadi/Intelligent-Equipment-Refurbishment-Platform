@@ -14,12 +14,13 @@ const CATEGORIES = [
 ];
 
 async function seedAdmin() {
+  const hash = await bcrypt.hash(env.adminSeedPassword, 10);
   const existing = await sql`select id from profil where email = ${ADMIN_EMAIL}`;
   if (existing.length) {
-    console.log(`Admin already present (${ADMIN_EMAIL}) — skipped.`);
+    await sql`update profil set mot_de_passe_hash = ${hash} where email = ${ADMIN_EMAIL}`;
+    console.log(`Admin already present (${ADMIN_EMAIL}) — password reset from ADMIN_SEED_PASSWORD.`);
     return;
   }
-  const hash = await bcrypt.hash(env.adminSeedPassword, 10);
   await sql`
     insert into profil (role, nom, email, mot_de_passe_hash)
     values ('ADMINISTRATEUR', 'Administrateur', ${ADMIN_EMAIL}, ${hash})

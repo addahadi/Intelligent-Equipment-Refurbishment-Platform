@@ -238,7 +238,7 @@ function AuthForms({ defaultTab = 'connexion', onSuccess, compact = false }: Aut
       </div>
 
       {/* Form body */}
-      <div style={{ padding: compact ? '0 4px' : '0', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ padding: compact ? '0 4px' : '0 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
         {error && <ErrorBanner message={error} />}
 
         {tab === 'connexion' && (
@@ -505,8 +505,9 @@ export default function AuthPage() {
           overflow: 'hidden',
         }}
       >
-        <AuthForms defaultTab={defaultTab} />
-        <div style={{ padding: '0 16px 20px' }} />
+        <div style={{ padding: '24px 24px 28px' }}>
+          <AuthForms defaultTab={defaultTab} />
+        </div>
       </div>
 
       {/* Footer */}
